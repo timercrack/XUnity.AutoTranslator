@@ -7,7 +7,7 @@
     <PackageTags>unity;xunity</PackageTags>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <DevelopmentDependency>True</DevelopmentDependency>
-    <TargetFramework>net35</TargetFramework>
+    <TargetFrameworks>net35;net6.0</TargetFrameworks>
     <Version>$(VersionExtProtocol)</Version>
   </PropertyGroup>
 
@@ -15,12 +15,34 @@
     <None Update="*.ps1" CopyToOutputDirectory="Always" Pack="true" PackagePath="tools" />
   </ItemGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-     <DocumentationFile>bin\Release\net35\XUnity.AutoTranslator.Plugin.ExtProtocol.xml</DocumentationFile>
+  <PropertyGroup Condition="'$(Configuration)'=='Release'">
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <DocumentationFile>$(OutputPath)$(AssemblyName).xml</DocumentationFile>
   </PropertyGroup>
 
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="if $(ConfigurationName) == Release (&#xD;&#xA;   XCOPY /Y /I &quot;$(TargetDir)$(TargetName)$(TargetExt)&quot; &quot;$(SolutionDir)dist\Translators\FullNET\&quot;&#xD;&#xA;)" />
+  <PropertyGroup Condition="'$(TargetFramework)'=='net35'">
+    <DefineConstants>MANAGED</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)'=='net6.0'">
+    <DefineConstants>IL2CPP</DefineConstants>
+  </PropertyGroup>
+
+  <Target Name="PostBuild" AfterTargets="Build"
+    Condition="'$(ConfigurationName)' == 'Release' and '$(TargetFramework)'=='net35'">
+    <PropertyGroup>
+      <TranslatorOutputDir>$(SolutionDir)dist\Translators\FullNET\</TranslatorOutputDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <TranslatorFiles Include="$(TargetPath)" />
+      <TranslatorFiles Include="$(TargetDir)$(TargetName).xml"
+        Condition="Exists('$(TargetDir)$(TargetName).xml')" />
+      <TranslatorFiles Include="$(TargetDir)$(TargetName).pdb"
+        Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
+    </ItemGroup>
+    <MakeDir Directories="$(TranslatorOutputDir)" />
+    <Copy SourceFiles="@(TranslatorFiles)" DestinationFolder="$(TranslatorOutputDir)"
+      SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

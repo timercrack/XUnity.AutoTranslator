@@ -67,7 +67,7 @@ namespace XUnity.AutoTranslator.Plugin.Core
             var orig = Original.Target;
 
             var texture = ComponentHelper.CreateEmptyTexture2D( _textureFormat );
-#warning HideAndDontSave?
+            // TODO: Verify if HideAndDontSave is required.
             texture.LoadImageEx( newData, format, orig );
 
             SetTranslated( texture );

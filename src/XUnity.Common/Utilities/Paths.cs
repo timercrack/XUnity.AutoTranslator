@@ -1,10 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
 using UnityEngine;
-using XUnity.Common.Utilities;
 
 namespace XUnity.Common.Utilities
 {
@@ -24,11 +20,17 @@ namespace XUnity.Common.Utilities
          set => _gameRoot = value;
       }
 
+      /// <summary>
+      /// Initializes the cached game root path if it has not been set already.
+      /// </summary>
       public static void Initialize()
       {
          GetAndSetGameRoot();
       }
 
+      /// <summary>
+      /// Resolves and stores the application directory root.
+      /// </summary>
       private static string GetAndSetGameRoot()
       {
          return _gameRoot = new DirectoryInfo( Application.dataPath ).Parent.FullName;

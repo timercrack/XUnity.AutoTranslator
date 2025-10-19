@@ -624,7 +624,7 @@ namespace XUnity.AutoTranslator.Plugin.Core.Extensions
 
       public static Texture2D GetTexture( this object ui )
       {
-#warning NOT TESTED FOR IL2CPP, but may work
+         // TODO: Validate IL2CPP compatibility for this code path.
          if( ui == null ) return null;
 
          if( ui.TryCastTo<SpriteRenderer>( out var spriteRenderer ) )
@@ -645,7 +645,7 @@ namespace XUnity.AutoTranslator.Plugin.Core.Extensions
 
       public static Sprite SetTexture( this object ui, Texture2D texture, Sprite sprite, bool isPrefixHooked )
       {
-#warning NOT TESTED FOR IL2CPP, but may work
+         // TODO: Validate IL2CPP compatibility for this code path.
          if( ui == null ) return null;
 
          var currentTexture = ui.GetTexture();
@@ -778,7 +778,7 @@ namespace XUnity.AutoTranslator.Plugin.Core.Extensions
 
       public static TextureDataResult GetTextureData( this Texture2D texture )
       {
-#warning Probably wont work with IL2CPP
+         // TODO: Revisit for IL2CPP compatibility before enabling.
          var start = Time.realtimeSinceStartup;
 
          var width = texture.width;

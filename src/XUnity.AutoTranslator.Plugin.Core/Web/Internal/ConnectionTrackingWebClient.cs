@@ -16,6 +16,7 @@ using XUnity.Common.Logging;
 namespace XUnity.AutoTranslator.Plugin.Core.Web.Internal
 {
 #pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
+#pragma warning disable SYSLIB0014 // WebRequest-based networking kept for legacy compatibility
 
    #region EventArgs
 
@@ -508,13 +509,13 @@ namespace XUnity.AutoTranslator.Plugin.Core.Web.Internal
          }
          if( this.baseAddress == null )
          {
-            return new Uri( address.ToString() + query, query != null );
+            return new Uri( address.ToString() + query, UriKind.RelativeOrAbsolute );
          }
          if( query == null )
          {
             return new Uri( this.baseAddress, address.ToString() );
          }
-         return new Uri( this.baseAddress, address.ToString() + query, query != null );
+         return new Uri( this.baseAddress, address.ToString() + query );
       }
 
       private string DetermineMethod( Uri address, string method, bool is_upload )
@@ -902,13 +903,13 @@ namespace XUnity.AutoTranslator.Plugin.Core.Web.Internal
          }
          if( this.baseAddress == null )
          {
-            return new Uri( path + queryString, queryString != null );
+            return new Uri( path + queryString, UriKind.RelativeOrAbsolute );
          }
          if( queryString == null )
          {
             return new Uri( this.baseAddress, path );
          }
-         return new Uri( this.baseAddress, path + queryString, queryString != null );
+         return new Uri( this.baseAddress, path + queryString );
       }
 
       protected virtual void OnDownloadDataCompleted( XUnityDownloadDataCompletedEventArgs args )
@@ -1856,7 +1857,7 @@ namespace XUnity.AutoTranslator.Plugin.Core.Web.Internal
       {
          StringBuilder builder = new StringBuilder();
          int length = str.Length;
-         for( int i = 0 ; i < length ; i++ )
+         for( int i = 0; i < length; i++ )
          {
             char ch = str[ i ];
             if( ch == ' ' )
@@ -1886,7 +1887,7 @@ namespace XUnity.AutoTranslator.Plugin.Core.Web.Internal
             int length = bytes.Length;
             if( length != 0 )
             {
-               for( int i = 0 ; i < length ; i++ )
+               for( int i = 0; i < length; i++ )
                {
                   char ch = (char)bytes[ i ];
                   if( ch == ' ' )

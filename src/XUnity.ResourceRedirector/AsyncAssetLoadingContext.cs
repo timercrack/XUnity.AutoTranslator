@@ -11,7 +11,6 @@ namespace XUnity.ResourceRedirector
    {
       private AssetBundleExtensionData _ext;
       private bool _lookedForExt = false;
-      private UnityEngine.Object[] _assets;
       private AssetBundleRequest _request;
       private BackingFieldOrArray _backingField;
 

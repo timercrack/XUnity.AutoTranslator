@@ -16,8 +16,9 @@
 		<None Update="*.ps1" CopyToOutputDirectory="Always" Pack="true" PackagePath="tools" />
 	</ItemGroup>
 
-	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-		<DocumentationFile>bin\Release\net35\XUnity.ResourceRedirector.xml</DocumentationFile>
+	<PropertyGroup Condition="'$(Configuration)'=='Release'">
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<DocumentationFile>$(OutputPath)$(AssemblyName).xml</DocumentationFile>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(TargetFramework)'=='net35'">

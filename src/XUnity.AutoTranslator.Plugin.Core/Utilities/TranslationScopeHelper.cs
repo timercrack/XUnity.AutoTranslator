@@ -26,9 +26,9 @@ namespace XUnity.AutoTranslator.Plugin.Utilities
                   GetScopeReturn = GetScopeFromComponent( component );
                }
                if( GetScopeReturn != -1 )
-			      {
-				      return GetScopeReturn; 
-			      }
+               {
+                  return GetScopeReturn;
+               }
                else if( ui is GUIContent guic ) // not same as spamming component because we allow nulls
                {
                   return TranslationScopes.None;
@@ -79,7 +79,9 @@ namespace XUnity.AutoTranslator.Plugin.Utilities
 
       private static int GetActiveSceneIdByApplication()
       {
+#pragma warning disable CS0618 // Application.loadedLevel is kept for pre-SceneManager Unity builds
          return Application.loadedLevel;
+#pragma warning restore CS0618
       }
    }
 

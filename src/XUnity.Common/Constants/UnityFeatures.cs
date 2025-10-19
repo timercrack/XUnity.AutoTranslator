@@ -1,9 +1,5 @@
 ﻿using System;
-using System.Collections;
-using System.Linq;
 using System.Reflection;
-using System.Reflection.Emit;
-using System.Text;
 
 namespace XUnity.Common.Constants
 {
@@ -13,12 +9,29 @@ namespace XUnity.Common.Constants
    /// </summary>
    public static class UnityFeatures
    {
+#if MANAGED
       private static readonly BindingFlags All = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
+#endif
 
+      /// <summary>
+      /// Indicates whether <c>Input.mouseScrollDelta</c> is available in the current Unity runtime.
+      /// </summary>
       public static bool SupportsMouseScrollDelta { get; } = false;
+      /// <summary>
+      /// Indicates whether text clipboard support exists (TextEditor.text setter available).
+      /// </summary>
       public static bool SupportsClipboard { get; } = false;
+      /// <summary>
+      /// Indicates whether <c>CustomYieldInstruction</c> is available in the current Unity runtime.
+      /// </summary>
       public static bool SupportsCustomYieldInstruction { get; } = false;
+      /// <summary>
+      /// Indicates whether the SceneManager API is present and can be used.
+      /// </summary>
       public static bool SupportsSceneManager { get; } = false;
+      /// <summary>
+      /// Indicates whether <c>WaitForSecondsRealtime</c> is available in the current Unity runtime.
+      /// </summary>
       public static bool SupportsWaitForSecondsRealtime { get; set; } = false;
 
       static UnityFeatures()
@@ -29,7 +42,7 @@ namespace XUnity.Common.Constants
          }
          catch( Exception )
          {
-            
+
          }
 
          try
@@ -38,7 +51,7 @@ namespace XUnity.Common.Constants
          }
          catch( Exception )
          {
-            
+
          }
 
          try
@@ -46,7 +59,7 @@ namespace XUnity.Common.Constants
             SupportsSceneManager = UnityTypes.Scene != null
                && UnityTypes.SceneManager != null
 #if MANAGED
-               && UnityTypes.SceneManager.ClrType.GetMethod("add_sceneLoaded", All) != null;
+               && UnityTypes.SceneManager.ClrType.GetMethod( "add_sceneLoaded", All ) != null;
 #else
                && UnityTypes.SceneManager_Methods.add_sceneLoaded != null;
 #endif

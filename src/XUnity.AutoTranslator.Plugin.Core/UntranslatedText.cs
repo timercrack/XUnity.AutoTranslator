@@ -227,7 +227,7 @@ namespace XUnity.AutoTranslator.Plugin.Core
          int firstNonWhitespace = 0;
          int lastNonWhitespace = 0;
 
-#warning should we use Original_Text to do this whitespace stuff instead?
+         // TODO: Evaluate whether whitespace normalization should use Original_Text instead.
          StringBuilder leadingBuilder = null;
          while( i < originalText.Length && char.IsWhiteSpace( originalText[ i ] ) )
          {

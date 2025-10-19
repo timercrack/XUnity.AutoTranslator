@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -174,16 +175,28 @@ namespace XUnity.AutoTranslator.Plugin.Core.Endpoints.ExtProtocol
             while( !_disposed )
             {
                var returnedPayload = _process.StandardOutput.ReadLine();
+               if( returnedPayload == null )
+               {
+                  break;
+               }
+
                var response = ExtProtocolConvert.Decode( returnedPayload );
                HandleProtocolMessageResponse( response );
             }
          }
          catch( Exception e )
          {
-            _failed = true;
             _initializing = false;
 
-            XuaLogger.AutoTranslator.Error( e, "Error occurred while reading standard output from external process." );
+            if( _disposed )
+            {
+               XuaLogger.AutoTranslator.Debug( e, "Reader loop terminated due to endpoint disposal." );
+            }
+            else
+            {
+               _failed = true;
+               XuaLogger.AutoTranslator.Error( e, "Error occurred while reading standard output from external process." );
+            }
          }
       }
 
@@ -382,11 +395,56 @@ namespace XUnity.AutoTranslator.Plugin.Core.Endpoints.ExtProtocol
          {
             if( disposing )
             {
-               if( _process != null )
+               _disposed = true;
+
+               var process = _process;
+               if( process != null )
                {
-                  //_process.Kill();
-                  _process.Dispose();
-                  _thread.Abort();
+                  try
+                  {
+                     if( !process.HasExited )
+                     {
+                        process.CloseMainWindow();
+                        if( !process.WaitForExit( 500 ) )
+                        {
+                           process.Kill();
+                           process.WaitForExit( 500 );
+                        }
+                     }
+                  }
+                  catch( InvalidOperationException )
+                  {
+                  }
+                  catch( NotSupportedException )
+                  {
+                  }
+                  catch( Win32Exception )
+                  {
+                  }
+                  finally
+                  {
+                     process.Dispose();
+                     _process = null;
+                  }
+               }
+
+               var thread = _thread;
+               if( thread != null )
+               {
+                  try
+                  {
+                     if( !thread.Join( 500 ) )
+                     {
+                        XuaLogger.AutoTranslator.Warn( "External protocol reader thread did not exit within timeout." );
+                     }
+                  }
+                  catch( ThreadStateException )
+                  {
+                  }
+                  finally
+                  {
+                     _thread = null;
+                  }
                }
             }
 

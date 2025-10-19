@@ -188,7 +188,7 @@ namespace XUnity.AutoTranslator.Plugin.Core
          }
          catch( Exception e )
          {
-            XuaLogger.AutoTranslator.Info( "The current version of the game doesn't support compiled Regex" );
+            XuaLogger.AutoTranslator.Info( e, "The current version of the game doesn't support compiled Regex" );
          }
       }
       private static void LoadFallbackFont()
@@ -2459,7 +2459,7 @@ namespace XUnity.AutoTranslator.Plugin.Core
                var textKey = new UntranslatedText( untranslatedTextPart, false, false, Settings.FromLanguageUsesWhitespaceBetweenWords, true, Settings.TemplateAllNumberAway );
                if( tc.IsTranslatable( textKey.TemplatedOriginal_Text, true, scope ) )
                {
-#warning Why is using a regex here not allowed?
+                  // TODO: Why is using a regex here not allowed?
                   string partTranslation;
                   if( tc.TryGetTranslation( textKey, false, true, scope, out partTranslation ) )
                   {
@@ -2720,6 +2720,9 @@ namespace XUnity.AutoTranslator.Plugin.Core
          }
       }
 
+      /// <summary>
+      /// Unity lifecycle callback invoked when the component is first enabled.
+      /// </summary>
       public void Start()
       {
          if( !_started )
@@ -2821,6 +2824,9 @@ namespace XUnity.AutoTranslator.Plugin.Core
          }
       }
 
+      /// <summary>
+      /// Unity update loop used to drive translation tasks and UI state.
+      /// </summary>
       public void Update()
       {
          try
@@ -2887,6 +2893,9 @@ namespace XUnity.AutoTranslator.Plugin.Core
          }
       }
 
+      /// <summary>
+      /// Unity GUI callback for rendering plugin UI overlays.
+      /// </summary>
       public void OnGUI()
       {
          // initialize ui

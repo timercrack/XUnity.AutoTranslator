@@ -20,7 +20,9 @@ namespace XUnity.AutoTranslator.Plugin.Core
       internal static MonoBehaviour MonoBehaviour;
 
       private static bool _loaded;
-      private static bool _bootstrapped;
+#if MANAGED
+   private static bool _bootstrapped;
+#endif
 
       /// <summary>
       /// Loads the plugin with the specified environment.

@@ -42,7 +42,13 @@ namespace XUnity.Common.Utilities
             ( x != null && x.Pointer == y.Pointer );
       }
 #else
-      public bool Equals( object x, object y )
+      /// <summary>
+      /// Determines whether two managed Unity object references point to the same instance.
+      /// </summary>
+      /// <param name="x">First object instance.</param>
+      /// <param name="y">Second object instance.</param>
+      /// <returns><c>true</c> if both arguments reference the same object; otherwise <c>false</c>.</returns>
+      public new bool Equals( object x, object y )
       {
          return ReferenceEquals( x, y );
       }

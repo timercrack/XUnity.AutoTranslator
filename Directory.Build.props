@@ -14,13 +14,20 @@
 	<PropertyGroup>
 		<Authors>gravydevsupreme, Bepis, others at https://github.com/bbepis/XUnity.AutoTranslator</Authors>
 		<Copyright>Copyright © 2018 / MIT License</Copyright>
-		<PackageReleaseNotes>https://github.com/bbepis/XUnity.AutoTranslator/blob/master/CHANGELOG.md</PackageReleaseNotes>
+		<PackageReleaseNotes>
+			https://github.com/bbepis/XUnity.AutoTranslator/blob/master/CHANGELOG.md</PackageReleaseNotes>
 		<PackageProjectUrl>https://github.com/bbepis/XUnity.AutoTranslator</PackageProjectUrl>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
 		<PackageTags>unity;xunity</PackageTags>
 	</PropertyGroup>
 
-	<Target Name="AddGeneratedFile" BeforeTargets="BeforeCompile;CoreCompile" Inputs="$(MSBuildAllProjects)" Outputs="$(IntermediateOutputPath)GeneratedFile.cs">
+	<PropertyGroup>
+		<SolutionDir Condition="'$(SolutionDir)' == ''">
+			$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)'))</SolutionDir>
+	</PropertyGroup>
+
+	<Target Name="AddGeneratedFile" BeforeTargets="BeforeCompile;CoreCompile"
+		Inputs="$(MSBuildAllProjects)" Outputs="$(IntermediateOutputPath)GeneratedFile.cs">
 		<PropertyGroup>
 			<GeneratedText><![CDATA[namespace $(RootNamespace) { internal static class GeneratedInfo { public const string PROJECT_VERSION = "$(Version)"%3B } }]]></GeneratedText>
 			<GeneratedFilePath>$(IntermediateOutputPath)GeneratedInfo.cs</GeneratedFilePath>
