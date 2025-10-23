@@ -65,4 +65,8 @@
 		</EmbeddedResource>
 	</ItemGroup>
 
+	<ItemGroup>
+		<EmbeddedResource Include="Configuration\AutoTranslatorConfig.default.ini" />
+	</ItemGroup>
+
 </Project>

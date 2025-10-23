@@ -468,6 +468,17 @@
             Ignores the component.
             </summary>
         </member>
+        <member name="T:XUnity.AutoTranslator.Plugin.Core.Configuration.ConfigurationDefaults">
+            <summary>
+            Provides helpers for creating default configuration assets when no user file exists.
+            </summary>
+        </member>
+        <member name="M:XUnity.AutoTranslator.Plugin.Core.Configuration.ConfigurationDefaults.EnsureExists(System.String)">
+            <summary>
+            Ensures that the configuration file exists by materializing the embedded default if necessary.
+            </summary>
+            <param name="configPath">Absolute path to the configuration file that should be available.</param>
+        </member>
         <member name="T:XUnity.AutoTranslator.Plugin.Core.Constants.KnownTranslateEndpointNames">
             <summary>
             Class representing known endpoint names.

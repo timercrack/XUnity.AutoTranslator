@@ -23,6 +23,7 @@ namespace XUnity.AutoTranslator.Plugin.BepInEx
          TranslationPath = Paths.BepInExRootPath;
 
          _configPath = Path.Combine( ConfigPath, "AutoTranslatorConfig.ini" );
+         ConfigurationDefaults.EnsureExists( _configPath );
          //XuaLogger.Current = new BepInLogger();
       }
 

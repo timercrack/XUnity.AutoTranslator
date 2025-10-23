@@ -1,0 +1,4 @@
+/p:Configuration=Release
+/nologo
+/verbosity:quiet
+/clp:Summary

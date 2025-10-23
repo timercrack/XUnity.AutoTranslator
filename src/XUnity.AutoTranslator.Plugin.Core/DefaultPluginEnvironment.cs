@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using ExIni;
+using XUnity.AutoTranslator.Plugin.Core.Configuration;
 using XUnity.Common.Constants;
 using XUnity.Common.Utilities;
 
@@ -19,6 +20,7 @@ namespace XUnity.AutoTranslator.Plugin.Core
       {
          _dataFolder = Path.Combine( Paths.GameRoot, "AutoTranslator" );
          _configPath = Path.Combine( _dataFolder, "Config.ini" );
+         ConfigurationDefaults.EnsureExists( _configPath );
          AllowDefaultInitializeHarmonyDetourBridge = allowDefaultInitializeHarmonyDetourBridge;
       }
 
@@ -29,7 +31,7 @@ namespace XUnity.AutoTranslator.Plugin.Core
             return ( _file ?? ( _file = ReloadConfig() ) ); ;
          }
       }
-      
+
       public string TranslationPath => _dataFolder;
 
       public string ConfigPath => _dataFolder;
