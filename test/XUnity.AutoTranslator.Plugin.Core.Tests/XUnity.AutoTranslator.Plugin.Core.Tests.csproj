@@ -1,7 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net471</TargetFramework>
+    <TargetFramework>net35</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DefineConstants>MANAGED</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -14,19 +17,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Translators\BingTranslateLegitimate\BingTranslateLegitimate.csproj" />
-    <ProjectReference Include="..\..\src\Translators\BingTranslate\BingTranslate.csproj" />
-    <ProjectReference Include="..\..\src\Translators\Common.ExtProtocol.Executor\Common.ExtProtocol.Executor.csproj" />
-    <ProjectReference Include="..\..\src\Translators\DeepLTranslate.ExtProtocol\DeepLTranslate.ExtProtocol.csproj" />
-    <ProjectReference Include="..\..\src\Translators\DeepLTranslate\DeepLTranslate.csproj" />
-    <ProjectReference Include="..\..\src\Translators\GoogleTranslate\GoogleTranslate.csproj" />
-    <ProjectReference Include="..\..\src\XUnity.AutoTranslator.Plugin.Core\XUnity.AutoTranslator.Plugin.Core.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Reference Include="UnityEngine">
-      <HintPath>..\..\libs\UnityEngine.dll</HintPath>
-    </Reference>
+    <ProjectReference
+      Include="..\..\src\XUnity.AutoTranslator.Plugin.Core\XUnity.AutoTranslator.Plugin.Core.csproj" />
   </ItemGroup>
 
 </Project>

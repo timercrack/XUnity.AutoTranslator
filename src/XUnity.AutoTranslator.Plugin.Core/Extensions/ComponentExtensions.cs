@@ -55,6 +55,7 @@ namespace XUnity.AutoTranslator.Plugin.Core.Extensions
       private static readonly string MarkAsChangedMethodName = "MarkAsChanged";
       private static readonly string SupportRichTextPropertyName = "supportRichText";
       private static readonly string RichTextPropertyName = "richText";
+      private const string LogTag = "[ComponentExtensions]";
 
       [ThreadStatic]
       private static GameObject[] m_objects; // thread local cache to keep path building allocation-free
@@ -133,12 +134,13 @@ namespace XUnity.AutoTranslator.Plugin.Core.Extensions
                if( Settings.BlacklistPaths != null && Settings.BlacklistPaths.Count > 0 )
                {
                   path = go.GetPath();
-                  if( !string.IsNullOrEmpty( path ) && MatchesPath( path, Settings.BlacklistPaths ) )
+                  var hasPath = !string.IsNullOrEmpty( path );
+                  var isBlacklisted = hasPath && MatchesPath( path, Settings.BlacklistPaths );
+                  if( isBlacklisted )
                   {
                      return true;
                   }
                }
-
                if( Settings.WhitelistPaths != null && Settings.WhitelistPaths.Count > 0 )
                {
                   path = path ?? go.GetPath();
@@ -201,25 +203,7 @@ namespace XUnity.AutoTranslator.Plugin.Core.Extensions
          return false;
       }
 
-      private static bool MatchesPath( string path, HashSet<string> paths )
-      {
-         foreach( var candidate in paths )
-         {
-            if( string.Equals( path, candidate, StringComparison.Ordinal ) )
-            {
-               return true;
-            }
-
-            if( path.Length > candidate.Length
-               && path.StartsWith( candidate, StringComparison.Ordinal )
-               && path[ candidate.Length ] == '/' )
-            {
-               return true;
-            }
-         }
-
-         return false;
-      }
+      private static bool MatchesPath( string path, HashSet<string> paths ) => PathMatching.MatchesPath( path, paths );
 
       public static bool IsComponentActive( this object ui )
       {
@@ -903,6 +887,58 @@ namespace XUnity.AutoTranslator.Plugin.Core.Extensions
          var format = texture2d.format;
          return dataType == ImageFormat.PNG
             || ( dataType == ImageFormat.TGA && ( format == TextureFormat.ARGB32 || format == TextureFormat.RGBA32 || format == TextureFormat.RGB24 ) );
+      }
+   }
+
+   internal static class PathMatching
+   {
+      internal static bool MatchesPath( string path, HashSet<string> paths )
+      {
+         foreach( var rawCandidate in paths )
+         {
+            if( string.IsNullOrEmpty( rawCandidate ) )
+            {
+               continue;
+            }
+
+            var candidate = NormalizeCandidatePath( rawCandidate );
+            if( string.IsNullOrEmpty( candidate ) )
+            {
+               continue;
+            }
+
+            if( string.Equals( path, candidate, StringComparison.Ordinal ) )
+            {
+               return true;
+            }
+
+            if( path.Length > candidate.Length
+               && path.StartsWith( candidate, StringComparison.Ordinal )
+               && path[ candidate.Length ] == '/' )
+            {
+               return true;
+            }
+         }
+
+         return false;
+      }
+
+      internal static string NormalizeCandidatePath( string candidate )
+      {
+         candidate = candidate.Trim();
+
+         if( candidate.Length == 0 || candidate[ 0 ] != '/' )
+         {
+            return string.Empty;
+         }
+
+         var end = candidate.Length - 1;
+         while( end > 0 && candidate[ end ] == '/' )
+         {
+            end--;
+         }
+
+         return end >= 0 ? candidate.Substring( 0, end + 1 ) : string.Empty;
       }
    }
 }

@@ -18,7 +18,7 @@ select-string -Path D:/Github/bighelper_dll/src/*.cpp -Pattern 'some_function'
 - 编译 c++或者 c#工程时先运行环境设置脚本：
 
 ```powershell
-& "D:/Program Files/Microsoft Visual Studio/2026/Common7/Tools/Launch-VsDevShell.ps1" -Arch amd64 -HostArch amd64
+& "D:/Program Files/Microsoft Visual Studio/2026/Common7/Tools/Launch-VsDevShell.ps1" -Arch amd64 -HostArch amd64;Set-Location D:\Github\XUnity.AutoTranslator
 ```
 
 - 运行 PowerShell 命令时请直接执行命令，不要使用形如 `pwsh -NoProfile -Command "..."` 的包裹方式。
