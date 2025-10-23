@@ -55,7 +55,9 @@ namespace XUnity.AutoTranslator.Plugin.Core.Extensions
       private static readonly string MarkAsChangedMethodName = "MarkAsChanged";
       private static readonly string SupportRichTextPropertyName = "supportRichText";
       private static readonly string RichTextPropertyName = "richText";
-      private static GameObject[] _objects = new GameObject[ 128 ];
+
+      [ThreadStatic]
+      private static GameObject[] m_objects; // thread local cache to keep path building allocation-free
       private static readonly string XuaIgnore = "XUAIGNORE";
       private static readonly string XuaIgnoreTree = "XUAIGNORETREE";
       private static List<IPropertyMover> TexturePropertyMovers;
@@ -123,6 +125,30 @@ namespace XUnity.AutoTranslator.Plugin.Core.Extensions
       {
          if( ui is Component component && component )
          {
+            var go = component.gameObject;
+            string path = null;
+
+            if( go )
+            {
+               if( Settings.BlacklistPaths != null && Settings.BlacklistPaths.Count > 0 )
+               {
+                  path = go.GetPath();
+                  if( !string.IsNullOrEmpty( path ) && MatchesPath( path, Settings.BlacklistPaths ) )
+                  {
+                     return true;
+                  }
+               }
+
+               if( Settings.WhitelistPaths != null && Settings.WhitelistPaths.Count > 0 )
+               {
+                  path = path ?? go.GetPath();
+                  if( !string.IsNullOrEmpty( path ) && MatchesPath( path, Settings.WhitelistPaths ) )
+                  {
+                     return false;
+                  }
+               }
+            }
+
             var tr = component.transform;
 
             if( tr.name.Contains( XuaIgnore ) ) // Also includes XuaIgnoreTree
@@ -170,6 +196,26 @@ namespace XUnity.AutoTranslator.Plugin.Core.Extensions
             inputField = component.gameObject.GetFirstComponentInSelfOrAncestor( UnityTypes.UIInput?.UnityType );
 
             return inputField != null;
+         }
+
+         return false;
+      }
+
+      private static bool MatchesPath( string path, HashSet<string> paths )
+      {
+         foreach( var candidate in paths )
+         {
+            if( string.Equals( path, candidate, StringComparison.Ordinal ) )
+            {
+               return true;
+            }
+
+            if( path.Length > candidate.Length
+               && path.StartsWith( candidate, StringComparison.Ordinal )
+               && path[ candidate.Length ] == '/' )
+            {
+               return true;
+            }
          }
 
          return false;
@@ -337,11 +383,16 @@ namespace XUnity.AutoTranslator.Plugin.Core.Extensions
 
       public static bool SupportsLineParser( this object ui )
       {
-         if( Settings.GameLogTextPaths.Count > 0 )
+         if( Settings.GameLogTextPaths != null && Settings.GameLogTextPaths.Count > 0 )
          {
-            if( ui is Component component )
+            if( ui is Component component && component )
             {
-               return Settings.GameLogTextPaths.Contains( component.gameObject.GetPath() );
+               var go = component.gameObject;
+               if( go )
+               {
+                  var path = go.GetPath();
+                  return !string.IsNullOrEmpty( path ) && Settings.GameLogTextPaths.Contains( path );
+               }
             }
          }
          return false;
@@ -572,39 +623,59 @@ namespace XUnity.AutoTranslator.Plugin.Core.Extensions
       {
          if( obj is GameObject go )
          {
-
+            return go ? go : null;
          }
          else if( obj is Component comp )
          {
-            go = comp.gameObject;
+            if( !comp ) return null;
+
+            var goFromComponent = comp.gameObject;
+            return goFromComponent ? goFromComponent : null;
          }
          else
          {
             throw new ArgumentException( "Expected object to be a GameObject or component.", "obj" );
          }
-
-         return go;
       }
 
       public static string[] GetPathSegments( this object obj )
       {
          var go = GetAssociatedGameObject( obj );
+         if( go == null )
+         {
+            return new string[ 0 ];
+         }
+         var buffer = m_objects;
+         if( buffer == null )
+         {
+            buffer = new GameObject[ 128 ];
+            m_objects = buffer;
+         }
 
          int i = 0;
          int j = 0;
 
-         _objects[ i++ ] = go;
+         buffer[ i++ ] = go;
          while( go.transform.parent != null )
          {
+            if( i == buffer.Length )
+            {
+               var newBuffer = new GameObject[ buffer.Length * 2 ];
+               Array.Copy( buffer, newBuffer, buffer.Length );
+               buffer = newBuffer;
+               m_objects = buffer;
+            }
+
             go = go.transform.parent.gameObject;
-            _objects[ i++ ] = go;
+            buffer[ i++ ] = go;
          }
 
          var result = new string[ i ];
          while( --i >= 0 )
          {
-            result[ j++ ] = _objects[ i ].name;
-            _objects[ i ] = null;
+            var current = buffer[ i ];
+            result[ j++ ] = current != null ? current.name : string.Empty;
+            buffer[ i ] = null;
          }
 
          return result;

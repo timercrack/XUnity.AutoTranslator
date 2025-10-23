@@ -1464,6 +1464,22 @@ namespace XUnity.AutoTranslator.Plugin.Core
                      }
                   }
                }
+
+               if( UnityTextParsers.LiteralNewlineParser != null )
+               {
+                  var result = UnityTextParsers.LiteralNewlineParser.Parse( text, scope, tc );
+                  if( result != null )
+                  {
+                     var isTranslatable = LanguageHelper.IsTranslatable( textKey.TemplatedOriginal_Text );
+                     translation = TranslateOrQueueWebJobImmediateByParserResult( ui, result, scope, false, false, isTranslatable || Settings.OutputUntranslatableText, tc, null );
+                     if( translation != null )
+                     {
+                        var isPartial = tc.IsPartial( textKey.TemplatedOriginal_Text, scope );
+                        SetTranslatedText( ui, translation, !isPartial ? originalText : null, info );
+                        return translation;
+                     }
+                  }
+               }
             }
          }
 
@@ -1587,7 +1603,22 @@ namespace XUnity.AutoTranslator.Plugin.Core
             }
             else
             {
-               var parserResult = UnityTextParsers.RegexSplittingTextParser.Parse( text, scope, TextCache ) ?? UnityTextParsers.RichTextParser.Parse( text, scope );
+               ParserResult parserResult = null;
+               if( UnityTextParsers.LiteralNewlineParser != null )
+               {
+                  parserResult = UnityTextParsers.LiteralNewlineParser.Parse( text, scope, TextCache );
+               }
+
+               if( parserResult == null )
+               {
+                  parserResult = UnityTextParsers.RegexSplittingTextParser.Parse( text, scope, TextCache );
+               }
+
+               if( parserResult == null )
+               {
+                  parserResult = UnityTextParsers.RichTextParser.Parse( text, scope );
+               }
+
                if( parserResult != null )
                {
                   translatedText = TranslateByParserResult( null, parserResult, scope, null, false, true, false, null );
@@ -1644,6 +1675,21 @@ namespace XUnity.AutoTranslator.Plugin.Core
                {
                   if( context.GetLevelsOfRecursion() < Settings.MaxTextParserRecursion )
                   {
+                     if( UnityTextParsers.LiteralNewlineParser != null && !context.HasBeenParsedBy( ParserResultOrigin.LiteralNewlineParser ) )
+                     {
+                        var newlineParserResult = UnityTextParsers.LiteralNewlineParser.Parse( text, scope, TextCache );
+                        if( newlineParserResult != null )
+                        {
+                           translation = TranslateByParserResult( endpoint, newlineParserResult, scope, result, allowStartTranslateImmediate, result.IsGlobal, allowFallback, context );
+                           if( translation != null )
+                           {
+                              result.SetCompleted( translation );
+                           }
+
+                           return result;
+                        }
+                     }
+
                      var parserResult = UnityTextParsers.RegexSplittingTextParser.Parse( text, scope, TextCache );
                      if( parserResult != null )
                      {
@@ -1759,6 +1805,21 @@ namespace XUnity.AutoTranslator.Plugin.Core
                {
                   if( context.GetLevelsOfRecursion() < Settings.MaxTextParserRecursion )
                   {
+                     if( UnityTextParsers.LiteralNewlineParser != null && !context.HasBeenParsedBy( ParserResultOrigin.LiteralNewlineParser ) )
+                     {
+                        var newlineParserResult = UnityTextParsers.LiteralNewlineParser.Parse( text, TranslationScopes.None, TextCache );
+                        if( newlineParserResult != null )
+                        {
+                           translation = TranslateByParserResult( endpoint, newlineParserResult, TranslationScopes.None, result, allowStartTranslateImmediate, result.IsGlobal, allowFallback, context );
+                           if( translation != null )
+                           {
+                              result.SetCompleted( translation );
+                           }
+
+                           return result;
+                        }
+                     }
+
                      var parserResult = UnityTextParsers.RegexSplittingTextParser.Parse( text, TranslationScopes.None, TextCache );
                      if( parserResult != null )
                      {
@@ -2137,6 +2198,27 @@ namespace XUnity.AutoTranslator.Plugin.Core
                            }
                         }
                      }
+                     if( UnityTextParsers.LiteralNewlineParser != null && !context.HasBeenParsedBy( ParserResultOrigin.LiteralNewlineParser ) )
+                     {
+                        var result = UnityTextParsers.LiteralNewlineParser.Parse( text, scope, tc );
+                        if( result != null )
+                        {
+                           translation = TranslateOrQueueWebJobImmediateByParserResult( ui, result, scope, allowStartTranslationImmediate, allowStartTranslationLater && !allowStabilizationOnTextComponent, isTranslatable || Settings.OutputUntranslatableText, tc, context );
+                           if( translation != null )
+                           {
+                              if( context == null )
+                              {
+                                 SetTranslatedText( ui, translation, text, info );
+                              }
+                              return translation;
+                           }
+
+                           if( context != null )
+                           {
+                              return null;
+                           }
+                        }
+                     }
                      if( UnityTextParsers.RegexSplittingTextParser.CanApply( ui ) )
                      {
                         var result = UnityTextParsers.RegexSplittingTextParser.Parse( text, scope, tc );
@@ -2305,6 +2387,19 @@ namespace XUnity.AutoTranslator.Plugin.Core
                               if( translatedText != null && context == null )
                               {
                                  SetTranslatedText( ui, translatedText, null, info );
+                              }
+                              return;
+                           }
+                        }
+                        if( UnityTextParsers.LiteralNewlineParser != null && !context.HasBeenParsedBy( ParserResultOrigin.LiteralNewlineParser ) )
+                        {
+                           var result = UnityTextParsers.LiteralNewlineParser.Parse( stabilizedText, scope, tc );
+                           if( result != null )
+                           {
+                              var translatedText = TranslateOrQueueWebJobImmediateByParserResult( ui, result, scope, true, false, isStabilizedTranslatable || Settings.OutputUntranslatableText, tc, context );
+                              if( translatedText != null && context == null )
+                              {
+                                 SetTranslatedText( ui, translatedText, text, info );
                               }
                               return;
                            }

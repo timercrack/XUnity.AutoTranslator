@@ -67,7 +67,7 @@ namespace XUnity.AutoTranslator.Plugin.Core.Utilities
       /// </summary>
       /// <param name="text"></param>
       /// <returns></returns>
-      public static bool ContainsVariableSymbols(string text)
+      public static bool ContainsVariableSymbols( string text )
       {
          var fidx = text.IndexOf( '{' );
          return fidx > -1
@@ -158,8 +158,97 @@ namespace XUnity.AutoTranslator.Plugin.Core.Utilities
       /// <returns></returns>
       public static bool IsTranslatable( string text )
       {
-         return ContainsLanguageSymbolsForSourceLanguage( text )
-            && !Settings.IgnoreTextStartingWith.Any( x => text.StartsWithStrict( x ) );
+         if( string.IsNullOrEmpty( text ) )
+         {
+            return false;
+         }
+
+         var sanitized = StripRichTextMarkup( text );
+         if( sanitized.IsNullOrWhiteSpace() )
+         {
+            return false;
+         }
+
+         if( Settings.IgnoreTextStartingWith.Any( x => text.StartsWithStrict( x ) ) )
+         {
+            return false;
+         }
+
+         if( !ReferenceEquals( sanitized, text ) && Settings.IgnoreTextStartingWith.Any( x => sanitized.StartsWithStrict( x ) ) )
+         {
+            return false;
+         }
+
+         return ContainsLanguageSymbolsForSourceLanguage( sanitized );
+      }
+
+      private static string StripRichTextMarkup( string text )
+      {
+         if( string.IsNullOrEmpty( text ) )
+         {
+            return text;
+         }
+
+         bool requiresSanitizing = false;
+         for( int i = 0; i < text.Length; i++ )
+         {
+            var ch = text[ i ];
+            if( ch == '<' || ch == '{' || ch == '[' )
+            {
+               requiresSanitizing = true;
+               break;
+            }
+         }
+
+         if( !requiresSanitizing )
+         {
+            return text;
+         }
+
+         var builder = new StringBuilder( text.Length );
+         var length = text.Length;
+
+         for( int i = 0; i < length; i++ )
+         {
+            var ch = text[ i ];
+
+            if( ch == '<' )
+            {
+               var closing = text.IndexOf( '>', i + 1 );
+               if( closing == -1 )
+               {
+                  builder.Append( text, i, length - i );
+                  break;
+               }
+
+               i = closing;
+               continue;
+            }
+
+            if( ch == '{' && i + 1 < length && text[ i + 1 ] == '{' )
+            {
+               var closing = text.IndexOf( "}}", i + 2, StringComparison.Ordinal );
+               if( closing != -1 )
+               {
+                  i = closing + 1;
+                  continue;
+               }
+            }
+
+            if( ch == '[' && i + 1 < length && text[ i + 1 ] == '[' )
+            {
+               var closing = text.IndexOf( "]]", i + 2, StringComparison.Ordinal );
+               if( closing != -1 )
+               {
+                  i = closing + 1;
+                  continue;
+               }
+            }
+
+            builder.Append( ch );
+         }
+
+         return builder.ToString();
       }
 
       internal static bool ContainsJapaneseSymbols( string text )

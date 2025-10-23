@@ -40,6 +40,7 @@ namespace XUnity.AutoTranslator.Plugin.Core.Parsing
                   template.Append( key ).Append( '\n' );
                   args.Add( new ArgumentedUntranslatedTextInfo
                   {
+                     Key = key,
                      Info = new UntranslatedTextInfo( line )
                   } );
                }

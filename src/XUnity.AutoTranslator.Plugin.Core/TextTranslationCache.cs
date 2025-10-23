@@ -1036,6 +1036,102 @@ namespace XUnity.AutoTranslator.Plugin.Core
          }
       }
 
+      private bool TryBuildFromLineTranslations( UntranslatedText key, bool allowRegex, bool allowToken, int scope, out string value )
+      {
+         value = null;
+
+         var source = key.TemplatedOriginal_Text ?? key.Original_Text;
+         if( !ContainsLineSeparators( source ) )
+         {
+            return false;
+         }
+
+         var separators = new List<string>();
+         var segments = SplitSegmentsPreservingDelimiters( source, separators );
+         if( segments.Count <= 1 )
+         {
+            return false;
+         }
+
+         var builder = new StringBuilder( source.Length + 8 );
+         var anyTranslated = false;
+
+         for( int i = 0; i < segments.Count; i++ )
+         {
+            var segment = segments[ i ];
+            var translatedSegment = segment;
+
+            if( segment.Length > 0 )
+            {
+               var segmentKey = new UntranslatedText( segment, false, true, Settings.FromLanguageUsesWhitespaceBetweenWords, true, Settings.TemplateAllNumberAway );
+               if( !TryGetTranslation( segmentKey, allowRegex, allowToken, scope, out translatedSegment ) )
+               {
+                  return false;
+               }
+
+               translatedSegment ??= string.Empty;
+               anyTranslated = true;
+            }
+
+            if( translatedSegment.Length > 0 )
+            {
+               builder.Append( translatedSegment );
+            }
+
+            if( i < separators.Count )
+            {
+               builder.Append( separators[ i ] );
+            }
+         }
+
+         if( !anyTranslated )
+         {
+            return false;
+         }
+
+         value = builder.ToString();
+         return true;
+      }
+
+      private static bool ContainsLineSeparators( string text )
+      {
+         if( string.IsNullOrEmpty( text ) ) return false;
+         return text.IndexOf( "\\n", StringComparison.Ordinal ) >= 0;
+      }
+
+      private static List<string> SplitSegmentsPreservingDelimiters( string text, List<string> separators )
+      {
+         var segments = new List<string>();
+         if( text == null )
+         {
+            segments.Add( string.Empty );
+            return segments;
+         }
+
+         var builder = new StringBuilder( text.Length );
+         var length = text.Length;
+
+         for( int i = 0; i < length; )
+         {
+            var c = text[ i ];
+
+            if( c == '\\' && i + 1 < length && text[ i + 1 ] == 'n' )
+            {
+               segments.Add( builder.ToString() );
+               builder.Length = 0;
+               separators.Add( "\\n" );
+               i += 2;
+               continue;
+            }
+
+            builder.Append( c );
+            i++;
+         }
+
+         segments.Add( builder.ToString() );
+         return segments;
+      }
+
       public bool TryGetTranslationSplitter( string text, int scope, out Match match, out RegexTranslationSplitter splitter )
       {
          if( scope != TranslationScopes.None && _scopedTranslations.TryGetValue( scope, out var dicts ) && dicts.SplitterRegexes.Count > 0 )
@@ -1616,6 +1712,18 @@ namespace XUnity.AutoTranslator.Plugin.Core
                   return result;
                }
             }
+         }
+
+         if( !result && TryBuildFromLineTranslations( key, allowRegex, allowToken, scope, out var combinedFromLines ) )
+         {
+            value = combinedFromLines;
+            var cacheKey = key.TemplatedOriginal_Text ?? key.Original_Text;
+            if( !string.IsNullOrEmpty( cacheKey ) )
+            {
+               AddTranslationToCache( cacheKey, value, false, TranslationType.Full, scope );
+            }
+
+            return true;
          }
 
          return result;

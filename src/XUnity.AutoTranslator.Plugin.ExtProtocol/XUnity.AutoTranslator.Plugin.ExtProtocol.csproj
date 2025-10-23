@@ -5,44 +5,14 @@
     <Description>Package that contains a simple inter-process protocol format used in XUnity.</Description>
     <Authors>gravydevsupreme</Authors>
     <PackageTags>unity;xunity</PackageTags>
-    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-    <DevelopmentDependency>True</DevelopmentDependency>
-    <TargetFrameworks>net35;net6.0</TargetFrameworks>
+    <TargetFramework>net35</TargetFramework>
     <Version>$(VersionExtProtocol)</Version>
+    <DefineConstants>MANAGED</DefineConstants>
   </PropertyGroup>
-
-  <ItemGroup>
-    <None Update="*.ps1" CopyToOutputDirectory="Always" Pack="true" PackagePath="tools" />
-  </ItemGroup>
 
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <DocumentationFile>$(OutputPath)$(AssemblyName).xml</DocumentationFile>
   </PropertyGroup>
-
-  <PropertyGroup Condition="'$(TargetFramework)'=='net35'">
-    <DefineConstants>MANAGED</DefineConstants>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(TargetFramework)'=='net6.0'">
-    <DefineConstants>IL2CPP</DefineConstants>
-  </PropertyGroup>
-
-  <Target Name="PostBuild" AfterTargets="Build"
-    Condition="'$(ConfigurationName)' == 'Release' and '$(TargetFramework)'=='net35'">
-    <PropertyGroup>
-      <TranslatorOutputDir>$(SolutionDir)dist\Translators\FullNET\</TranslatorOutputDir>
-    </PropertyGroup>
-    <ItemGroup>
-      <TranslatorFiles Include="$(TargetPath)" />
-      <TranslatorFiles Include="$(TargetDir)$(TargetName).xml"
-        Condition="Exists('$(TargetDir)$(TargetName).xml')" />
-      <TranslatorFiles Include="$(TargetDir)$(TargetName).pdb"
-        Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
-    </ItemGroup>
-    <MakeDir Directories="$(TranslatorOutputDir)" />
-    <Copy SourceFiles="@(TranslatorFiles)" DestinationFolder="$(TranslatorOutputDir)"
-      SkipUnchangedFiles="true" />
-  </Target>
 
 </Project>

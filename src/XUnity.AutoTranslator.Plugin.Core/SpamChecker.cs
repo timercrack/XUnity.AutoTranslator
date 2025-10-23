@@ -37,7 +37,7 @@ namespace XUnity.AutoTranslator.Plugin.Core
 
       public void PerformChecks( string untranslatedText, TranslationEndpointManager endpoint )
       {
-         CheckStaggerText( untranslatedText );
+         CheckStaggerText( untranslatedText, endpoint );
          CheckConsecutiveFrames();
          CheckConsecutiveSeconds( endpoint );
          CheckThresholds( endpoint );
@@ -124,8 +124,13 @@ namespace XUnity.AutoTranslator.Plugin.Core
          }
       }
 
-      private void CheckStaggerText( string untranslatedText )
+      private void CheckStaggerText( string untranslatedText, TranslationEndpointManager endpoint )
       {
+         if( endpoint != null && !endpoint.EnableSpamChecks )
+         {
+            return;
+         }
+
          var currentFrame = Time.frameCount;
          if( currentFrame != _lastStaggerCheckFrame )
          {

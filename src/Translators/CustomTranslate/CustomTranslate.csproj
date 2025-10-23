@@ -5,12 +5,28 @@
    </PropertyGroup>
 
    <ItemGroup>
-      <ProjectReference Include="..\..\XUnity.AutoTranslator.Plugin.Core\XUnity.AutoTranslator.Plugin.Core.csproj" />
+      <ProjectReference
+         Include="..\..\XUnity.AutoTranslator.Plugin.Core\XUnity.AutoTranslator.Plugin.Core.csproj" />
       <ProjectReference Include="..\..\XUnity.Common\XUnity.Common.csproj" />
    </ItemGroup>
 
    <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-      <Exec Command="if $(ConfigurationName) == Release (&#xD;&#xA;   XCOPY /Y /I &quot;$(TargetDir)$(TargetName)$(TargetExt)&quot; &quot;$(SolutionDir)dist\Translators\&quot;&#xD;&#xA;)" />
+      <Exec
+         Command="if $(ConfigurationName) == Release (&#xD;&#xA;   XCOPY /Y /I &quot;$(TargetDir)$(TargetName)$(TargetExt)&quot; &quot;$(SolutionDir)dist\Translators\&quot;&#xD;&#xA;)" />
+
+      <PropertyGroup Condition="'$(CopyToBepInExPath)'!=''">
+         <NormalizedTarget>$(CopyToBepInExPath.TrimEnd('\'))</NormalizedTarget>
+         <TranslatorsDir>$(NormalizedTarget)\plugins\XUnity.AutoTranslator\Translators</TranslatorsDir>
+      </PropertyGroup>
+
+      <MakeDir Directories="$(TranslatorsDir)" Condition="'$(CopyToBepInExPath)'!=''" />
+
+      <ItemGroup Condition="'$(CopyToBepInExPath)'!=''">
+         <_TranslatorOutputs Include="$(TargetDir)$(TargetName)$(TargetExt)" />
+      </ItemGroup>
+
+      <Copy SourceFiles="@(_TranslatorOutputs)" DestinationFolder="$(TranslatorsDir)"
+         SkipUnchangedFiles="true" Condition="'$(CopyToBepInExPath)'!=''" />
    </Target>
 
 </Project>

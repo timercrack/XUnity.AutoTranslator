@@ -110,6 +110,8 @@ namespace XUnity.AutoTranslator.Plugin.Core.Configuration
       public static bool ForceUIResizing;
       public static string[] IgnoreTextStartingWith;
       public static HashSet<string> GameLogTextPaths;
+      public static HashSet<string> BlacklistPaths;
+      public static HashSet<string> WhitelistPaths;
       public static bool TextGetterCompatibilityMode;
       public static TextPostProcessing RomajiPostProcessing;
       public static TextPostProcessing TranslationPostProcessing;
@@ -257,6 +259,12 @@ namespace XUnity.AutoTranslator.Plugin.Core.Configuration
             GameLogTextPaths = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "GameLogTextPaths", string.Empty )
                ?.Split( new[] { ';' }, StringSplitOptions.RemoveEmptyEntries ).ToHashSet() ?? new HashSet<string>();
             GameLogTextPaths.RemoveWhere( x => !x.StartsWith( "/" ) ); // clean up to ensure no 'empty' entries
+            BlacklistPaths = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "BlacklistPaths", string.Empty )
+               ?.Split( new[] { ';' }, StringSplitOptions.RemoveEmptyEntries ).ToHashSet() ?? new HashSet<string>();
+            BlacklistPaths.RemoveWhere( x => !x.StartsWith( "/" ) );
+            WhitelistPaths = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "WhitelistPaths", string.Empty )
+               ?.Split( new[] { ';' }, StringSplitOptions.RemoveEmptyEntries ).ToHashSet() ?? new HashSet<string>();
+            WhitelistPaths.RemoveWhere( x => !x.StartsWith( "/" ) );
             RomajiPostProcessing = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "RomajiPostProcessing", TextPostProcessing.ReplaceMacronWithCircumflex | TextPostProcessing.RemoveApostrophes | TextPostProcessing.ReplaceHtmlEntities );
             TranslationPostProcessing = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "TranslationPostProcessing", TextPostProcessing.ReplaceMacronWithCircumflex | TextPostProcessing.ReplaceHtmlEntities );
             RegexPostProcessing = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "RegexPostProcessing", TextPostProcessing.None );

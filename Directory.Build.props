@@ -26,6 +26,10 @@
 			$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)'))</SolutionDir>
 	</PropertyGroup>
 
+	<PropertyGroup>
+		<CopyToBepInExPath>G:\SteamLibrary\steamapps\common\Ostranauts\BepInEx</CopyToBepInExPath>
+	</PropertyGroup>
+
 	<Target Name="AddGeneratedFile" BeforeTargets="BeforeCompile;CoreCompile"
 		Inputs="$(MSBuildAllProjects)" Outputs="$(IntermediateOutputPath)GeneratedFile.cs">
 		<PropertyGroup>

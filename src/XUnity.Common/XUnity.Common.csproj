@@ -6,51 +6,19 @@
 			Redirector.</Description>
 		<Authors>gravydevsupreme</Authors>
 		<PackageTags>unity;xunity</PackageTags>
-		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-		<DevelopmentDependency>True</DevelopmentDependency>
-		<TargetFrameworks>net35;net6.0</TargetFrameworks>
+		<TargetFramework>net35</TargetFramework>
 		<Version>$(VersionCommon)</Version>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<DefineConstants>MANAGED</DefineConstants>
 	</PropertyGroup>
-
-	<ItemGroup>
-		<None Update="*.ps1" CopyToOutputDirectory="Always" Pack="true" PackagePath="tools" />
-	</ItemGroup>
 
 	<PropertyGroup Condition="'$(Configuration)'=='Release'">
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<DocumentationFile>$(OutputPath)$(AssemblyName).xml</DocumentationFile>
 	</PropertyGroup>
 
-	<PropertyGroup Condition="'$(TargetFramework)'=='net35'">
-		<DefineConstants>MANAGED</DefineConstants>
-	</PropertyGroup>
-
-	<PropertyGroup Condition="'$(TargetFramework)'=='net6.0'">
-		<DefineConstants>IL2CPP</DefineConstants>
-	</PropertyGroup>
-
-	<ItemGroup Condition="'$(TargetFramework)'=='net35'">
+	<ItemGroup>
 		<ProjectReference Include="..\UnityEngine\UnityEngine.csproj" />
-	</ItemGroup>
-
-	<ItemGroup Condition="'$(TargetFramework)'=='net6.0'">
-		<Reference Include="Il2Cppmscorlib">
-			<HintPath>..\..\libs\Proxies\Il2Cppmscorlib.dll</HintPath>
-		</Reference>
-		<Reference Include="Il2CppInterop.Runtime">
-			<HintPath>..\..\libs\Unhollower\Il2CppInterop.Runtime.dll</HintPath>
-		</Reference>
-		<Reference Include="Il2CppInterop.Common">
-			<HintPath>..\..\libs\Unhollower\Il2CppInterop.Common.dll</HintPath>
-		</Reference>
-
-		<Reference Include="UnityEngine.CoreModule">
-			<HintPath>..\..\libs\Proxies\UnityEngine.CoreModule.dll</HintPath>
-		</Reference>
-		<Reference Include="UnityEngine.TextRenderingModule">
-			<HintPath>..\..\libs\Proxies\UnityEngine.TextRenderingModule.dll</HintPath>
-		</Reference>
 	</ItemGroup>
 
 	<ItemGroup>

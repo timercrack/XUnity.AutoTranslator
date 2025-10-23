@@ -39,7 +39,7 @@ namespace XUnity.AutoTranslator.Plugin.Core.Endpoints
       private Dictionary<string, string> _translations;
       private Dictionary<string, string> _reverseTranslations;
 
-      public TranslationEndpointManager( ITranslateEndpoint endpoint, Exception error, InitializationContext context  )
+      public TranslationEndpointManager( ITranslateEndpoint endpoint, Exception error, InitializationContext context )
       {
          Endpoint = endpoint;
          Error = error;
@@ -473,22 +473,16 @@ namespace XUnity.AutoTranslator.Plugin.Core.Endpoints
          }
          else
          {
-            if( !HasBatchLogicFailed )
-            {
-               CoroutineHelper.Start( EnableBatchingAfterDelay() );
-            }
-
-            HasBatchLogicFailed = true;
+            XuaLogger.AutoTranslator.Error( "A batch translation returned an unexpected number of results. Retrying the full batch." );
             for( int i = 0; i < jobs.Length; i++ )
             {
                var job = jobs[ i ];
 
                var key = job.Key;
+               RegisterTranslationFailureFor( key.TemplatedOriginal_Text );
                AddUnstartedJob( key, job );
                RemoveOngoingTranslation( key );
             }
-
-            XuaLogger.AutoTranslator.Error( "A batch operation failed. Disabling batching and restarting failed jobs." );
          }
       }
 
@@ -586,24 +580,18 @@ namespace XUnity.AutoTranslator.Plugin.Core.Endpoints
          }
          else
          {
-            if( !HasBatchLogicFailed )
-            {
-               CoroutineHelper.Start( EnableBatchingAfterDelay() );
-            }
-
-            HasBatchLogicFailed = true;
+            XuaLogger.AutoTranslator.Error( "A batch translation failed. Retrying the full batch." );
             for( int i = 0; i < jobs.Length; i++ )
             {
                var job = jobs[ i ];
 
                var key = job.Key;
+               RegisterTranslationFailureFor( key.TemplatedOriginal_Text );
                AddUnstartedJob( key, job );
                RemoveOngoingTranslation( key );
 
                XuaLogger.AutoTranslator.Error( $"Failed: '{job.Key.TemplatedOriginal_Text}'" );
             }
-
-            XuaLogger.AutoTranslator.Error( "A batch operation failed. Disabling batching and restarting failed jobs." );
          }
 
          if( !HasFailedDueToConsecutiveErrors )
