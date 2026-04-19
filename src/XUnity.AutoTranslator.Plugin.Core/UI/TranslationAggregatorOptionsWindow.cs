@@ -7,6 +7,7 @@ namespace XUnity.AutoTranslator.Plugin.Core.UI
 {
    internal class TranslationAggregatorOptionsWindow
    {
+      private static bool _isScrollViewSupported = true;
       private const int WindowId = 45733721;
       private const float WindowWidth = 320;
 
@@ -71,43 +72,83 @@ namespace XUnity.AutoTranslator.Plugin.Core.UI
                IsShown = false;
             }
 
-            GUILayout.Label( "Available Translators" );
+            GUILayout.Label( "Available Translators", ArrayHelper.Null<GUILayoutOption>() );
 
             // GROUP
-            _scrollPosition = GUILayout.BeginScrollView( _scrollPosition, GUI.skin.box );
-
-            foreach( var vm in _toggles )
+            if( _isScrollViewSupported )
             {
-               var previousEnabled = GUI.enabled;
-
-               GUI.enabled = vm.Enabled;
-               var previousValue = vm.IsToggled();
-               var newValue = GUILayout.Toggle( previousValue, vm.Text );
-               if( previousValue != newValue )
+               bool hasStartedScrollView = false;
+               try
                {
-                  vm.OnToggled();
-               }
+                  _scrollPosition = GUILayout.BeginScrollView( _scrollPosition, GUI.skin.box, ArrayHelper.Null<GUILayoutOption>() );
+                  hasStartedScrollView = true;
 
-               GUI.enabled = previousEnabled;
+                  foreach( var vm in _toggles )
+                  {
+                     var previousEnabled = GUI.enabled;
+
+                     GUI.enabled = vm.Enabled;
+                     var previousValue = vm.IsToggled();
+                     var newValue = GUILayout.Toggle( previousValue, vm.Text, ArrayHelper.Null<GUILayoutOption>() );
+                     if( previousValue != newValue )
+                     {
+                        vm.OnToggled();
+                     }
+
+                     GUI.enabled = previousEnabled;
+                  }
+               }
+               catch( System.Exception e )
+               {
+                  if ( e is System.NotSupportedException )
+                  {
+                     XUnity.Common.Logging.XuaLogger.AutoTranslator.Warn( e, "An error occurred while calling GUILayout.BeginScrollView. Fallback mode will be used." );
+                     _isScrollViewSupported = false;
+                  }
+                  else throw;
+               }
+               finally
+               {
+                  if( hasStartedScrollView ) GUILayout.EndScrollView();
+               }
             }
 
-            GUILayout.EndScrollView();
+            if( !_isScrollViewSupported )
+            {
+               GUILayout.BeginVertical( GUI.skin.box, ArrayHelper.Null<GUILayoutOption>() );
 
-            GUILayout.BeginHorizontal();
-            GUILayout.Label( "Height" );
-            _viewModel.Height = Mathf.Round( GUILayout.HorizontalSlider( _viewModel.Height, 50, 300, GUILayout.MaxWidth( 250 ) ) );
+               foreach( var vm in _toggles )
+               {
+                  var previousEnabled = GUI.enabled;
+
+                  GUI.enabled = vm.Enabled;
+                  var previousValue = vm.IsToggled();
+                  var newValue = GUILayout.Toggle( previousValue, vm.Text, ArrayHelper.Null<GUILayoutOption>() );
+                  if( previousValue != newValue )
+                  {
+                     vm.OnToggled();
+                  }
+
+                  GUI.enabled = previousEnabled;
+               }
+
+               GUILayout.EndVertical();
+            }
+
+            GUILayout.BeginHorizontal( ArrayHelper.Null<GUILayoutOption>() );
+            GUILayout.Label( "Height", ArrayHelper.Null<GUILayoutOption>() );
+            _viewModel.Height = Mathf.Round( GUILayout.HorizontalSlider( _viewModel.Height, 50, 300, ArrayHelper.Null<GUILayoutOption>() ) );
             GUILayout.EndHorizontal();
 
-            GUILayout.BeginHorizontal();
-            GUILayout.Label( "Width" );
-            _viewModel.Width = Mathf.Round( GUILayout.HorizontalSlider( _viewModel.Width, 200, 1000, GUILayout.MaxWidth( 250 ) ) );
+            GUILayout.BeginHorizontal( ArrayHelper.Null<GUILayoutOption>() );
+            GUILayout.Label( "Width", ArrayHelper.Null<GUILayoutOption>() );
+            _viewModel.Width = Mathf.Round( GUILayout.HorizontalSlider( _viewModel.Width, 200, 1000, ArrayHelper.Null<GUILayoutOption>() ) );
             GUILayout.EndHorizontal();
 
             GUI.DragWindow();
          }
          finally
          {
-
             AutoTranslationPlugin.Current.EnableAutoTranslator();
          }
       }

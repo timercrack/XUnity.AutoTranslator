@@ -29,11 +29,16 @@ namespace XUnity.Common.Utilities
                 {
                     try
                     {
-                        try
-                        {
-                            _current = new LegacyInputSystem();
-                            XuaLogger.AutoTranslator.Debug( "[UnityInput] Using LegacyInputSystem" );
-                        }
+                                                    try
+                                                    {
+                        #if IL2CPP
+                                                        _current = new Il2CppLegacyInputSystem();
+                                                        XuaLogger.AutoTranslator.Debug( "[UnityInput] Using Il2CppLegacyInputSystem" );
+                        #else
+                                                        _current = new LegacyInputSystem();
+                                                        XuaLogger.AutoTranslator.Debug( "[UnityInput] Using LegacyInputSystem" );
+                        #endif
+                                                    }
                         catch
                         {
                             var newInputSystem = new NewInputSystem();
@@ -54,7 +59,11 @@ namespace XUnity.Common.Utilities
         /// <summary>
         /// True if the Input class is not disabled.
         /// </summary>
+#if IL2CPP
+        public bool LegacyInputSystemAvailable => Current is Il2CppLegacyInputSystem;
+#else
         public bool LegacyInputSystemAvailable => Current is LegacyInputSystem;
+#endif
     }
 
     /// <summary>
@@ -894,4 +903,209 @@ namespace XUnity.Common.Utilities
 
         public IEnumerable<KeyCode> SupportedKeyCodes { get; } = (KeyCode[])Enum.GetValues(typeof(KeyCode));
     }
+
+#if IL2CPP
+    internal class Il2CppLegacyInputSystem : IInputSystem
+    {
+        private Type GetInputType()
+        {
+            var type = XUnity.Common.Constants.UnityTypes.Input?.ClrType;
+            if (type == null) throw new InvalidOperationException("Failed to find the UnityEngine.Input type");
+            return type;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public Il2CppLegacyInputSystem() => GetKeyDown(KeyCode.A);
+
+        private readonly object[] _stringInputArgs = new object[1];
+        private readonly object[] _keyCodeInputArgs = new object[1];
+        private readonly object[] _intInputArgs = new object[1];
+
+        private static bool ShouldSwallowInputReflectionException(Exception ex)
+        {
+            if (ex is System.Reflection.TargetInvocationException tie && tie.InnerException != null)
+            {
+                return ShouldSwallowInputReflectionException(tie.InnerException);
+            }
+
+            return ex is NotSupportedException
+                || ex is InvalidOperationException
+                || ex is MemberAccessException
+                || ex is System.Reflection.TargetException
+                || ex is System.Reflection.TargetParameterCountException
+                || ex is ArgumentException;
+        }
+
+        private bool InvokeBoolMethodOrDefault(System.Reflection.MethodInfo method, object argument, object[] argsArray)
+        {
+            if (method == null) return false;
+
+            try
+            {
+                argsArray[0] = argument;
+                return method.Invoke(null, argsArray) is bool result && result;
+            }
+            catch (Exception ex) when (ShouldSwallowInputReflectionException(ex))
+            {
+                var actual = ex is System.Reflection.TargetInvocationException tie && tie.InnerException != null
+                    ? tie.InnerException
+                    : ex;
+                XuaLogger.AutoTranslator.Debug("[UnityInput] Failed to invoke legacy IL2CPP input method '" + method.Name + "' - " + actual);
+                return false;
+            }
+        }
+
+        private T GetPropertyOrDefault<T>(System.Reflection.PropertyInfo property, T defaultValue = default)
+        {
+            if (property == null) return defaultValue;
+
+            try
+            {
+                var val = property.GetValue(null, null);
+                if (val is T result)
+                {
+                    return result;
+                }
+                return defaultValue;
+            }
+            catch (Exception ex) when (ShouldSwallowInputReflectionException(ex))
+            {
+                var actual = ex is System.Reflection.TargetInvocationException tie && tie.InnerException != null
+                    ? tie.InnerException
+                    : ex;
+                XuaLogger.AutoTranslator.Debug("[UnityInput] Failed to invoke legacy IL2CPP input property '" + property.Name + "' - " + actual);
+                return defaultValue;
+            }
+        }
+
+        private System.Reflection.MethodInfo _getKeyString;
+        public bool GetKey(string name)
+        {
+            if (_getKeyString == null) _getKeyString = GetInputType().GetMethod("GetKey", new[] { typeof(string) });
+            return InvokeBoolMethodOrDefault(_getKeyString, name, _stringInputArgs);
+        }
+
+        private System.Reflection.MethodInfo _getKey;
+        public bool GetKey(KeyCode key)
+        {
+            if (_getKey == null) _getKey = GetInputType().GetMethod("GetKey", new[] { typeof(KeyCode) });
+            return InvokeBoolMethodOrDefault(_getKey, key, _keyCodeInputArgs);
+        }
+
+        private System.Reflection.MethodInfo _getKeyDownString;
+        public bool GetKeyDown(string name)
+        {
+            if (_getKeyDownString == null) _getKeyDownString = GetInputType().GetMethod("GetKeyDown", new[] { typeof(string) });
+            return InvokeBoolMethodOrDefault(_getKeyDownString, name, _stringInputArgs);
+        }
+
+        private System.Reflection.MethodInfo _getKeyDown;
+        public bool GetKeyDown(KeyCode key)
+        {
+            if (_getKeyDown == null) _getKeyDown = GetInputType().GetMethod("GetKeyDown", new[] { typeof(KeyCode) });
+            return InvokeBoolMethodOrDefault(_getKeyDown, key, _keyCodeInputArgs);
+        }
+
+        private System.Reflection.MethodInfo _getKeyUpString;
+        public bool GetKeyUp(string name)
+        {
+            if (_getKeyUpString == null) _getKeyUpString = GetInputType().GetMethod("GetKeyUp", new[] { typeof(string) });
+            return InvokeBoolMethodOrDefault(_getKeyUpString, name, _stringInputArgs);
+        }
+
+        private System.Reflection.MethodInfo _getKeyUp;
+        public bool GetKeyUp(KeyCode key)
+        {
+            if (_getKeyUp == null) _getKeyUp = GetInputType().GetMethod("GetKeyUp", new[] { typeof(KeyCode) });
+            return InvokeBoolMethodOrDefault(_getKeyUp, key, _keyCodeInputArgs);
+        }
+
+        private System.Reflection.MethodInfo _getMouseButton;
+        public bool GetMouseButton(int button)
+        {
+            if (_getMouseButton == null) _getMouseButton = GetInputType().GetMethod("GetMouseButton", new[] { typeof(int) });
+            return InvokeBoolMethodOrDefault(_getMouseButton, button, _intInputArgs);
+        }
+
+        private System.Reflection.MethodInfo _getMouseButtonDown;
+        public bool GetMouseButtonDown(int button)
+        {
+            if (_getMouseButtonDown == null) _getMouseButtonDown = GetInputType().GetMethod("GetMouseButtonDown", new[] { typeof(int) });
+            return InvokeBoolMethodOrDefault(_getMouseButtonDown, button, _intInputArgs);
+        }
+
+        private System.Reflection.MethodInfo _getMouseButtonUp;
+        public bool GetMouseButtonUp(int button)
+        {
+            if (_getMouseButtonUp == null) _getMouseButtonUp = GetInputType().GetMethod("GetMouseButtonUp", new[] { typeof(int) });
+            return InvokeBoolMethodOrDefault(_getMouseButtonUp, button, _intInputArgs);
+        }
+
+        private System.Reflection.MethodInfo _resetInputAxes;
+        public void ResetInputAxes()
+        {
+            if (_resetInputAxes == null) _resetInputAxes = GetInputType().GetMethod("ResetInputAxes", Type.EmptyTypes);
+            try
+            {
+                _resetInputAxes?.Invoke(null, null);
+            }
+            catch (Exception ex) when (ShouldSwallowInputReflectionException(ex))
+            {
+                // Ignore
+            }
+        }
+
+        private System.Reflection.PropertyInfo _mousePosition;
+        public Vector3 mousePosition
+        {
+            get
+            {
+                if (_mousePosition == null) _mousePosition = GetInputType().GetProperty("mousePosition");
+                return GetPropertyOrDefault<Vector3>(_mousePosition, Vector3.zero);
+            }
+        }
+
+        private System.Reflection.PropertyInfo _mouseScrollDelta;
+        public Vector2 mouseScrollDelta
+        {
+            get
+            {
+                if (_mouseScrollDelta == null) _mouseScrollDelta = GetInputType().GetProperty("mouseScrollDelta");
+                return GetPropertyOrDefault<Vector2>(_mouseScrollDelta, Vector2.zero);
+            }
+        }
+
+        private System.Reflection.PropertyInfo _mousePresent;
+        public bool mousePresent
+        {
+            get
+            {
+                if (_mousePresent == null) _mousePresent = GetInputType().GetProperty("mousePresent");
+                return GetPropertyOrDefault<bool>(_mousePresent, false);
+            }
+        }
+
+        private System.Reflection.PropertyInfo _anyKey;
+        public bool anyKey
+        {
+            get
+            {
+                if (_anyKey == null) _anyKey = GetInputType().GetProperty("anyKey");
+                return GetPropertyOrDefault<bool>(_anyKey, false);
+            }
+        }
+
+        private System.Reflection.PropertyInfo _anyKeyDown;
+        public bool anyKeyDown
+        {
+            get
+            {
+                if (_anyKeyDown == null) _anyKeyDown = GetInputType().GetProperty("anyKeyDown");
+                return GetPropertyOrDefault<bool>(_anyKeyDown, false);
+            }
+        }
+
+        public IEnumerable<KeyCode> SupportedKeyCodes { get; } = (KeyCode[])Enum.GetValues(typeof(KeyCode));
+    }
+#endif
 }

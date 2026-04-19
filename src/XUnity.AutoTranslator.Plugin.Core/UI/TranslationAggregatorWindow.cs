@@ -199,6 +199,8 @@ namespace XUnity.AutoTranslator.Plugin.Core.UI
          }
       }
 
+      private static bool _isScrollViewSupported = true;
+
       private void DrawTextArea( float posy, ScrollPositioned positioned, string title, IEnumerable<string> texts )
       {
          GUI.Label( GUIUtil.R( GUIUtil.HalfComponentSpacing + 5, posy + 5, _viewModel.Width - GUIUtil.ComponentSpacing, GUIUtil.LabelHeight ), title );
@@ -207,15 +209,52 @@ namespace XUnity.AutoTranslator.Plugin.Core.UI
 
          float boxWidth = _viewModel.Width - GUIUtil.ComponentSpacing;
          float boxHeight = _viewModel.Height - GUIUtil.LabelHeight;
-         GUILayout.BeginArea( GUIUtil.R( GUIUtil.HalfComponentSpacing, posy, boxWidth, boxHeight ) );
-         positioned.ScrollPosition = GUILayout.BeginScrollView( positioned.ScrollPosition, GUI.skin.box );
 
-         foreach( var text in texts )
+         if( !_isScrollViewSupported )
+            GUILayout.BeginArea( GUIUtil.R( GUIUtil.HalfComponentSpacing, posy, boxWidth, boxHeight ) );
+         else
+            GUILayout.BeginArea( GUIUtil.R( GUIUtil.HalfComponentSpacing, posy, boxWidth, boxHeight ), GUI.skin.box );
+
+         if( _isScrollViewSupported )
          {
-            GUILayout.Label( text, GUIUtil.LabelTranslation, ArrayHelper.Null<GUILayoutOption>() );
+            bool hasStartedScrollView = false;
+            try
+            {
+               positioned.ScrollPosition = GUILayout.BeginScrollView( positioned.ScrollPosition, ArrayHelper.Null<GUILayoutOption>() );
+               hasStartedScrollView = true;
+
+               foreach( var text in texts )
+               {
+                  GUILayout.Label( text, GUIUtil.LabelTranslation, ArrayHelper.Null<GUILayoutOption>() );
+               }
+            }
+            catch( Exception e )
+            {
+               if( e is System.NotSupportedException )
+               {
+                  XUnity.Common.Logging.XuaLogger.AutoTranslator.Warn( e, "An error occurred while calling GUILayout.BeginScrollView. Fallback mode will be used." );
+                  _isScrollViewSupported = false;
+               }
+               else throw;
+            }
+            finally
+            {
+               if( hasStartedScrollView ) GUILayout.EndScrollView();
+            }
          }
 
-         GUILayout.EndScrollView();
+         if( !_isScrollViewSupported )
+         {
+            GUILayout.BeginVertical( GUI.skin.box, ArrayHelper.Null<GUILayoutOption>() );
+
+            foreach( var text in texts )
+            {
+               GUILayout.Label( text, GUIUtil.LabelTranslation, ArrayHelper.Null<GUILayoutOption>() );
+            }
+
+            GUILayout.EndVertical();
+         }
+
          GUILayout.EndArea();
       }
    }
