@@ -1,4 +1,8 @@
-﻿### 5.6.0
+﻿### 5.6.1
+* BUG FIX - Resolve hotkey unresponsiveness and GUI unstripping errors in IL2CPP (#834)
+* BUG FIX - Resolve font asset bundle loading failure in IL2CPP (#831)
+
+### 5.6.0
  * FEATURE - Added UIElements support (#818)
  * BUG FIX - Fix Papago translator JS chunk pattern to match current website structure (#820)
  * MISC - README: Add AutoPollinationTranslator to third-party translator list (#823)
