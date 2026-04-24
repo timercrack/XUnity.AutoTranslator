@@ -232,6 +232,7 @@ namespace XUnity.AutoTranslator.Plugin.Core.Extensions
          var type = ui.GetUnityType();
 
          return ( Settings.EnableIMGUI && !_guiContentCheckFailed && IsGUIContentSafe( ui ) )
+            || ( Settings.EnableUIElements && UnityTypes.TextElement != null && UnityTypes.TextElement.IsAssignableFrom( type ) )
             || ( Settings.EnableUGUI && UnityTypes.Text != null && UnityTypes.Text.IsAssignableFrom( type ) )
             || ( Settings.EnableNGUI && UnityTypes.UILabel != null && UnityTypes.UILabel.IsAssignableFrom( type ) )
             || ( Settings.EnableTextMesh && UnityTypes.TextMesh != null && UnityTypes.TextMesh.IsAssignableFrom( type ) )
@@ -463,6 +464,10 @@ namespace XUnity.AutoTranslator.Plugin.Core.Extensions
             if( Settings.EnableUGUI && UnityTypes.Text != null && UnityTypes.Text.IsAssignableFrom( unityType ) )
             {
                return Il2CppUtilities.CreateProxyComponentWithDerivedType( ui.Pointer, UnityTypes.Text.ClrType );
+            }
+            if( Settings.EnableUIElements && UnityTypes.TextElement != null && UnityTypes.TextElement.IsAssignableFrom( unityType ) )
+            {
+               return Il2CppUtilities.CreateProxyComponentWithDerivedType( ui.Pointer, UnityTypes.TextElement.ClrType );
             }
             else if( Settings.EnableTextMesh && UnityTypes.TextMesh != null && UnityTypes.TextMesh.IsAssignableFrom( unityType ) )
             {

@@ -1,4 +1,25 @@
-﻿### 5.4.6
+﻿### 5.6.1
+* BUG FIX - Resolve hotkey unresponsiveness and GUI unstripping errors in IL2CPP (#834)
+* BUG FIX - Resolve font asset bundle loading failure in IL2CPP (#831)
+
+### 5.6.0
+ * FEATURE - Added UIElements support (#818)
+ * BUG FIX - Fix Papago translator JS chunk pattern to match current website structure (#820)
+ * MISC - README: Add AutoPollinationTranslator to third-party translator list (#823)
+
+### 5.5.2
+ * BUG FIX - Use Authorization header instead of legacy query/body params for DeepL API auth
+ * BUG FIX - Fix override font stopping working after a while in IL2CPP
+
+### 5.5.1
+ * Use UnityInput to support both legacy and new input systems
+
+### 5.5.0
+ * FEATURE - Yandex Translate API v2 support
+ * FEATURE - Added support for `XUAIGNORETREE` tag in GameObject names to prevent translation of entire trees of GameObjects (previously added `XUAIGNORE` only ignores the named GameObject)
+ * FEATURE - Added `AutoTranslatorState.PluginInitialized` property and `PluginInitializationCompleted` event
+
+### 5.4.6
 * BUG FIX - Fix ResizeUI nullref crash if component is destroyed
 * BUG FIX - Replace culture sensitive string operations with invariant or ordinal to fix issues on Turkish and some other system locales
 

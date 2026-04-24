@@ -19,6 +19,31 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\UnityEngine\UnityEngine.csproj" />
+		<Reference Include="Unity.InputSystem">
+			<HintPath>..\..\libs\Unity.InputSystem.dll</HintPath>
+		</Reference>
+	</ItemGroup>
+
+	<ItemGroup Condition="'$(TargetFramework)'=='net6.0'">
+		<Reference Include="Il2Cppmscorlib">
+			<HintPath>..\..\libs\Proxies\Il2Cppmscorlib.dll</HintPath>
+		</Reference>
+		<Reference Include="Il2CppInterop.Runtime">
+			<HintPath>..\..\libs\Unhollower\Il2CppInterop.Runtime.dll</HintPath>
+		</Reference>
+		<Reference Include="Il2CppInterop.Common">
+			<HintPath>..\..\libs\Unhollower\Il2CppInterop.Common.dll</HintPath>
+		</Reference>
+
+		<Reference Include="UnityEngine.CoreModule">
+			<HintPath>..\..\libs\Proxies\UnityEngine.CoreModule.dll</HintPath>
+		</Reference>
+		<Reference Include="Unity.InputSystem">
+			<HintPath>..\..\libs\Proxies\Unity.InputSystem.dll</HintPath>
+		</Reference>
+		<Reference Include="UnityEngine.TextRenderingModule">
+			<HintPath>..\..\libs\Proxies\UnityEngine.TextRenderingModule.dll</HintPath>
+		</Reference>
 	</ItemGroup>
 
 	<ItemGroup>
