@@ -26,8 +26,8 @@ namespace XUnity.AutoTranslator.Plugin.Core.Configuration
       public static readonly int MaxFailuresForSameTextPerEndpoint = 3;
       public static readonly string TranslatorsFolder = "Translators";
       public static readonly int MaxMaxCharactersPerTranslation = 2500;
-      public static readonly string DefaultLanguage = "en";
-      public static readonly string DefaultFromLanguage = "ja";
+      public static readonly string DefaultLanguage = "zh";
+      public static readonly string DefaultFromLanguage = "en";
       public static readonly string EnglishLanguage = "en";
       public static readonly string Romaji = "romaji";
       public static readonly int MaxErrors = 5;
@@ -225,7 +225,7 @@ namespace XUnity.AutoTranslator.Plugin.Core.Configuration
                XuaLogger.AutoTranslator.Warn( e, "An error occurred while trying to determine TextMesh Pro version." );
             }
 
-            ServiceEndpoint = PluginEnvironment.Current.Preferences.GetOrDefault( "Service", "Endpoint", KnownTranslateEndpointNames.GoogleTranslateV2 );
+            ServiceEndpoint = PluginEnvironment.Current.Preferences.GetOrDefault( "Service", "Endpoint", KnownTranslateEndpointNames.LLMTranslate );
             FallbackServiceEndpoint = PluginEnvironment.Current.Preferences.GetOrDefault( "Service", "FallbackEndpoint", string.Empty );
 
             Language = string.Intern( PluginEnvironment.Current.Preferences.GetOrDefault( "General", "Language", DefaultLanguage ) );
@@ -237,16 +237,16 @@ namespace XUnity.AutoTranslator.Plugin.Core.Configuration
             PreprocessorsFile = PluginEnvironment.Current.Preferences.GetOrDefault( "Files", "PreprocessorsFile", Path.Combine( "Translation", Path.Combine( "{Lang}", Path.Combine( "Text", "_Preprocessors.txt" ) ) ) );
             PostprocessorsFile = PluginEnvironment.Current.Preferences.GetOrDefault( "Files", "PostprocessorsFile", Path.Combine( "Translation", Path.Combine( "{Lang}", Path.Combine( "Text", "_Postprocessors.txt" ) ) ) );
 
-            EnableIMGUI = PluginEnvironment.Current.Preferences.GetOrDefault( "TextFrameworks", "EnableIMGUI", false );
+            EnableIMGUI = PluginEnvironment.Current.Preferences.GetOrDefault( "TextFrameworks", "EnableIMGUI", true );
             EnableUGUI = PluginEnvironment.Current.Preferences.GetOrDefault( "TextFrameworks", "EnableUGUI", true );
             EnableUIElements = PluginEnvironment.Current.Preferences.GetOrDefault( "TextFrameworks", "EnableUIElements", true );
             EnableNGUI = PluginEnvironment.Current.Preferences.GetOrDefault( "TextFrameworks", "EnableNGUI", true );
             EnableTextMeshPro = PluginEnvironment.Current.Preferences.GetOrDefault( "TextFrameworks", "EnableTextMeshPro", true );
-            EnableTextMesh = PluginEnvironment.Current.Preferences.GetOrDefault( "TextFrameworks", "EnableTextMesh", false );
+            EnableTextMesh = PluginEnvironment.Current.Preferences.GetOrDefault( "TextFrameworks", "EnableTextMesh", true );
             EnableFairyGUI = PluginEnvironment.Current.Preferences.GetOrDefault( "TextFrameworks", "EnableFairyGUI", true );
 
-            MaxCharactersPerTranslation = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "MaxCharactersPerTranslation", 200 );
-            IgnoreWhitespaceInDialogue = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "IgnoreWhitespaceInDialogue", true );
+            MaxCharactersPerTranslation = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "MaxCharactersPerTranslation", 2500 );
+            IgnoreWhitespaceInDialogue = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "IgnoreWhitespaceInDialogue", false );
             MinDialogueChars = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "MinDialogueChars", 20 );
             ForceSplitTextAfterCharacters = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "ForceSplitTextAfterCharacters", 0 );
             CopyToClipboard = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "CopyToClipboard", false );
@@ -255,20 +255,20 @@ namespace XUnity.AutoTranslator.Plugin.Core.Configuration
             EnableUIResizing = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "EnableUIResizing", true );
             EnableBatching = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "EnableBatching", true );
             UseStaticTranslations = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "UseStaticTranslations", true );
-            OverrideFont = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "OverrideFont", string.Empty );
+            OverrideFont = ResolveLanguageSpecificSetting( "OverrideFont", PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "OverrideFont", string.Empty ) );
             OverrideFontSize = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "OverrideFontSize", (int?)null );
-            OverrideFontTextMeshPro = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "OverrideFontTextMeshPro", string.Empty );
-            FallbackFontTextMeshPro = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "FallbackFontTextMeshPro", string.Empty );
+            OverrideFontTextMeshPro = ResolveLanguageSpecificSetting( "OverrideFontTextMeshPro", PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "OverrideFontTextMeshPro", "zh=chinesefont;ru=arialuni_sdf_u6000" ) );
+            FallbackFontTextMeshPro = ResolveLanguageSpecificSetting( "FallbackFontTextMeshPro", PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "FallbackFontTextMeshPro", string.Empty ) );
             ResizeUILineSpacingScale = PluginEnvironment.Current.Preferences.GetOrDefault<float?>( "Behaviour", "ResizeUILineSpacingScale", null );
             ForceUIResizing = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "ForceUIResizing", false );
-            IgnoreTextStartingWith = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "IgnoreTextStartingWith", "\\u180e;" )
+            IgnoreTextStartingWith = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "IgnoreTextStartingWith", "Age:;C:;D:;E:;F:;G:;UTC;Mass:;Condition:" )
                ?.Split( new[] { ';' }, StringSplitOptions.RemoveEmptyEntries ).Select( x => JsonHelper.Unescape( x ) ).ToArray() ?? new string[ 0 ];
-            IgnoreTextRegexes = ParseRegexCollection( PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "IgnoreTextRegexes", string.Empty ), "IgnoreTextRegexes" );
+            IgnoreTextRegexes = ParseRegexCollection( PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "IgnoreTextRegexes", @"^\s*[xX]\d+\s*$" ), "IgnoreTextRegexes" );
             TextGetterCompatibilityMode = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "TextGetterCompatibilityMode", false );
-            GameLogTextPaths = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "GameLogTextPaths", string.Empty )
+            GameLogTextPaths = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "GameLogTextPaths", "/Canvas Stack/Canvas Crew Bar/GUICrewStatus/pnlMessageScroll;/Canvas Stack/Canvas Tooltip Compact/ItemList;/OffscreenDraw/CanvasDockSysDraw;/OffscreenDraw/CanvasATCDraw;/Canvas Stack/Canvas Objectives;/Canvas Stack/Canvas Helmet/bmpHelmet/pnlHUD;/Canvas Stack/Canvas GUI" )
                ?.Split( new[] { ';' }, StringSplitOptions.RemoveEmptyEntries ).ToHashSet() ?? new HashSet<string>();
             GameLogTextPaths.RemoveWhere( x => !x.StartsWith( "/" ) ); // clean up to ensure no 'empty' entries
-            IgnoreStabilizationPaths = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "IgnoreStabilizationPaths", string.Empty )
+            IgnoreStabilizationPaths = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "IgnoreStabilizationPaths", "/Canvas Info(Clone)/Offset" )
                ?.Split( new[] { ';' }, StringSplitOptions.RemoveEmptyEntries ).ToHashSet() ?? new HashSet<string>();
             IgnoreStabilizationPaths.RemoveWhere( x => !x.StartsWith( "/" ) );
             BlacklistPaths = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "BlacklistPaths", string.Empty )
@@ -293,12 +293,12 @@ namespace XUnity.AutoTranslator.Plugin.Core.Configuration
                .Select( x => x.Trim() )
                .Where( x => !string.IsNullOrEmpty( x ) )
                .ToHashSet( StringComparer.OrdinalIgnoreCase ) ?? new HashSet<string>( StringComparer.OrdinalIgnoreCase );
-            EnableTextPathLogging = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "EnableTextPathLogging", false );
+            EnableTextPathLogging = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "EnableTextPathLogging", true );
             EnableUIPathInspector = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "EnableUIPathInspector", false );
             TextPathLoggingIgnoredPaths = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "TextPathLoggingIgnoredPaths", string.Empty )
                ?.Split( new[] { ';' }, StringSplitOptions.RemoveEmptyEntries ).ToHashSet() ?? new HashSet<string>();
             TextPathLoggingIgnoredPaths.RemoveWhere( x => !x.StartsWith( "/" ) );
-            PeriodicManualHookIntervalSeconds = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "PeriodicManualHookIntervalSeconds", 0.0f );
+            PeriodicManualHookIntervalSeconds = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "PeriodicManualHookIntervalSeconds", 1.0f );
             OutputUntranslatableText = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "OutputUntranslatableText", false );
             IgnoreVirtualTextSetterCallingRules = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "IgnoreVirtualTextSetterCallingRules", false );
             MaxTextParserRecursion = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "MaxTextParserRecursion", 1 );
@@ -309,9 +309,9 @@ namespace XUnity.AutoTranslator.Plugin.Core.Configuration
             InitializeHarmonyDetourBridge = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "InitializeHarmonyDetourBridge", !ClrFeatures.SupportsReflectionEmit && PluginEnvironment.Current.AllowDefaultInitializeHarmonyDetourBridge );
             RedirectedResourceDetectionStrategy = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "RedirectedResourceDetectionStrategy", RedirectedResourceDetection.AppendMongolianVowelSeparatorAndRemoveAll );
             OutputTooLongText = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "OutputTooLongText", false );
-            TemplateAllNumberAway = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "TemplateAllNumberAway", false );
+            TemplateAllNumberAway = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "TemplateAllNumberAway", true );
             ReloadTranslationsOnFileChange = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "ReloadTranslationsOnFileChange", false );
-            DisableTextMeshProScrollInEffects = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "DisableTextMeshProScrollInEffects", ApplicationName.Equals( "SamuraiVandalism", StringComparison.OrdinalIgnoreCase ) || UnityTypes.UguiNovelText != null );
+            DisableTextMeshProScrollInEffects = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "DisableTextMeshProScrollInEffects", true );
             CacheParsedTranslations = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "CacheParsedTranslations", false );
 
             TextureDirectory = PluginEnvironment.Current.Preferences.GetOrDefault( "Texture", "TextureDirectory", Path.Combine( "Translation", Path.Combine( "{Lang}", "Texture" ) ) );
@@ -378,8 +378,8 @@ namespace XUnity.AutoTranslator.Plugin.Core.Configuration
             DisableCertificateValidation = PluginEnvironment.Current.Preferences.GetOrDefault( "Http", "DisableCertificateValidation", true );
 
 
-            Width = PluginEnvironment.Current.Preferences.GetOrDefault( "TranslationAggregator", "Width", 400.0f );
-            Height = PluginEnvironment.Current.Preferences.GetOrDefault( "TranslationAggregator", "Height", 100.0f );
+            Width = PluginEnvironment.Current.Preferences.GetOrDefault( "TranslationAggregator", "Width", 542.0f );
+            Height = PluginEnvironment.Current.Preferences.GetOrDefault( "TranslationAggregator", "Height", 300.0f );
             EnabledTranslators = PluginEnvironment.Current.Preferences.GetOrDefault( "TranslationAggregator", "EnabledTranslators", string.Empty )
                ?.Split( new[] { ';' }, StringSplitOptions.RemoveEmptyEntries ).ToHashSet() ?? new HashSet<string>();
 
@@ -519,6 +519,94 @@ namespace XUnity.AutoTranslator.Plugin.Core.Configuration
          catch( Exception e )
          {
             XuaLogger.AutoTranslator.Error( e, "An error occurred during while saving configuration." );
+         }
+      }
+
+      private static string ResolveLanguageSpecificSetting( string settingName, string rawValue )
+      {
+         if( string.IsNullOrEmpty( rawValue ) ) return string.Empty;
+
+         var trimmedValue = rawValue.Trim();
+         if( trimmedValue.Length == 0 ) return string.Empty;
+
+         Dictionary<string, string> mappings;
+         if( !TryParseLanguageSpecificMappings( trimmedValue, out mappings ) )
+         {
+            return trimmedValue.Parameterize();
+         }
+
+         var resolvedValue = ResolveLanguageSpecificMapping( mappings, Language );
+         if( resolvedValue != null )
+         {
+            XuaLogger.AutoTranslator.Info( $"Resolved language-specific setting '{settingName}' for destination language '{Language}'." );
+            return resolvedValue.Parameterize();
+         }
+
+         XuaLogger.AutoTranslator.Warn( $"Could not resolve language-specific setting '{settingName}' for destination language '{Language}'. Leaving it empty." );
+         return string.Empty;
+      }
+
+      private static bool TryParseLanguageSpecificMappings( string rawValue, out Dictionary<string, string> mappings )
+      {
+         mappings = null;
+
+         var entries = rawValue.Split( new[] { ';' }, StringSplitOptions.RemoveEmptyEntries );
+         if( entries.Length == 0 ) return false;
+
+         var parsedMappings = new Dictionary<string, string>( StringComparer.OrdinalIgnoreCase );
+         for( int i = 0; i < entries.Length; i++ )
+         {
+            var entry = entries[ i ].Trim();
+            if( entry.Length == 0 ) continue;
+
+            var separatorIndex = entry.IndexOf( '=' );
+            if( separatorIndex <= 0 ) return false;
+
+            var key = entry.Substring( 0, separatorIndex ).Trim();
+            if( key.Length == 0 ) return false;
+
+            var value = entry.Substring( separatorIndex + 1 ).Trim();
+            parsedMappings[ key ] = value;
+         }
+
+         if( parsedMappings.Count == 0 ) return false;
+
+         mappings = parsedMappings;
+         return true;
+      }
+
+      private static string ResolveLanguageSpecificMapping( Dictionary<string, string> mappings, string language )
+      {
+         foreach( var candidate in EnumerateLanguageCandidates( language ) )
+         {
+            string resolved;
+            if( mappings.TryGetValue( candidate, out resolved ) ) return resolved;
+         }
+
+         string fallback;
+         if( mappings.TryGetValue( "default", out fallback ) ) return fallback;
+         if( mappings.TryGetValue( "*", out fallback ) ) return fallback;
+         return null;
+      }
+
+      private static IEnumerable<string> EnumerateLanguageCandidates( string language )
+      {
+         if( string.IsNullOrEmpty( language ) ) yield break;
+
+         var seen = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
+         var normalizedLanguage = language.Trim().Replace( '_', '-' );
+         if( normalizedLanguage.Length == 0 ) yield break;
+
+         if( seen.Add( normalizedLanguage ) ) yield return normalizedLanguage;
+
+         var underscoreLanguage = normalizedLanguage.Replace( '-', '_' );
+         if( seen.Add( underscoreLanguage ) ) yield return underscoreLanguage;
+
+         var separatorIndex = normalizedLanguage.IndexOf( '-' );
+         if( separatorIndex > 0 )
+         {
+            var neutralLanguage = normalizedLanguage.Substring( 0, separatorIndex );
+            if( seen.Add( neutralLanguage ) ) yield return neutralLanguage;
          }
       }
 

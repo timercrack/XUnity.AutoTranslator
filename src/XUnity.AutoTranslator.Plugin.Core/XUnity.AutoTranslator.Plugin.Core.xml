@@ -484,6 +484,11 @@
             Class representing known endpoint names.
             </summary>
         </member>
+        <member name="F:XUnity.AutoTranslator.Plugin.Core.Constants.KnownTranslateEndpointNames.LLMTranslate">
+            <summary>
+            Gets the id used by LLMTranslate.
+            </summary>
+        </member>
         <member name="F:XUnity.AutoTranslator.Plugin.Core.Constants.KnownTranslateEndpointNames.GoogleTranslateV2">
             <summary>
             Gets the id used by GoogleTranslate.

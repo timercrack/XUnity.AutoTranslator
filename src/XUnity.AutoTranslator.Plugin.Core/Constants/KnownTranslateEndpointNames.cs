@@ -11,6 +11,11 @@ namespace XUnity.AutoTranslator.Plugin.Core.Constants
    public static class KnownTranslateEndpointNames
    {
       /// <summary>
+      /// Gets the id used by LLMTranslate.
+      /// </summary>
+      public const string LLMTranslate = "LLMTranslate";
+
+      /// <summary>
       /// Gets the id used by GoogleTranslate.
       /// </summary>
       public const string GoogleTranslateV2 = "GoogleTranslateV2";
