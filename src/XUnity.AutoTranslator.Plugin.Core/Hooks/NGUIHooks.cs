@@ -76,9 +76,9 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.NGUI
 
       static void MM_Detour( Component __instance, string value )
       {
-         _original( __instance, value );
+         value = AutoTranslationPlugin.Current.Hook_TextChanged_WithResult( __instance, value, false ) ?? value;
 
-         Postfix( __instance );
+         _original( __instance, value );
       }
 #endif
    }
@@ -101,12 +101,26 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.NGUI
          AutoTranslationPlugin.Current.Hook_TextChanged( __instance, true );
       }
 
+      public static void _Prefix( Component __instance )
+      {
+         AutoTranslationPlugin.Current.Hook_TextChanged_BeforeEnable( __instance );
+      }
+
       static void Postfix( Component __instance )
       {
          __instance = __instance.GetOrCreateNGUIDerivedProxy();
          if( __instance != null )
          {
             _Postfix( __instance );
+         }
+      }
+
+      static void Prefix( Component __instance )
+      {
+         __instance = __instance.GetOrCreateNGUIDerivedProxy();
+         if( __instance != null )
+         {
+            _Prefix( __instance );
          }
       }
 
@@ -118,9 +132,15 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.NGUI
 
       static void ML_Detour( IntPtr instance )
       {
+         var __instance = instance.CreateNGUIDerivedProxy();
+         if( __instance != null )
+         {
+            _Prefix( __instance );
+         }
+
          Il2CppUtilities.InvokeMethod( UnityTypes.UIRect_Methods.IL2CPP.OnEnable, instance );
 
-         var __instance = instance.CreateNGUIDerivedProxy();
+         __instance = instance.CreateNGUIDerivedProxy();
          if( __instance != null )
          {
             _Postfix( __instance );
@@ -138,6 +158,8 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.NGUI
 
       static void MM_Detour( Component __instance )
       {
+         Prefix( __instance );
+
          _original( __instance );
 
          Postfix( __instance );

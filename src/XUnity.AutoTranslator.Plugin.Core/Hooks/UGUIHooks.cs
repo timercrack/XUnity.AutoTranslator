@@ -78,9 +78,9 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.UGUI
 
       static void MM_Detour( Component __instance, string value )
       {
-         _original( __instance, value );
+         value = AutoTranslationPlugin.Current.Hook_TextChanged_WithResult( __instance, value, false ) ?? value;
 
-         Postfix( __instance );
+         _original( __instance, value );
       }
 #endif
    }
@@ -102,6 +102,11 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.UGUI
          AutoTranslationPlugin.Current.Hook_TextChanged( __instance, true );
       }
 
+      static void _Prefix( Component __instance )
+      {
+         AutoTranslationPlugin.Current.Hook_TextChanged_BeforeEnable( __instance );
+      }
+
       static void Postfix( Component __instance )
       {
          if( UnityTypes.Text.IsAssignableFrom( __instance.GetUnityType() ) )
@@ -114,6 +119,18 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.UGUI
          }
       }
 
+      static void Prefix( Component __instance )
+      {
+         if( UnityTypes.Text.IsAssignableFrom( __instance.GetUnityType() ) )
+         {
+#if IL2CPP
+            __instance = (Component)Il2CppUtilities.CreateProxyComponentWithDerivedType( __instance.Pointer, UnityTypes.Text.ClrType );
+#endif
+
+            _Prefix( __instance );
+         }
+      }
+
 #if IL2CPP
       static IntPtr TargetMethodPointer()
       {
@@ -122,6 +139,12 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.UGUI
 
       static void ML_Detour( IntPtr instance )
       {
+         if( instance.IsInstancePointerAssignableFrom( UnityTypes.Text.ClassPointer ) )
+         {
+            var __instance = (Component)Il2CppUtilities.CreateProxyComponentWithDerivedType( instance, UnityTypes.Text.ClrType );
+            _Prefix( __instance );
+         }
+
          Il2CppUtilities.InvokeMethod( UnityTypes.Text_Methods.IL2CPP.OnEnable, instance );
 
          if( instance.IsInstancePointerAssignableFrom( UnityTypes.Text.ClassPointer ) )
@@ -142,6 +165,8 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.UGUI
 
       static void MM_Detour( Component __instance )
       {
+         Prefix( __instance );
+
          _original( __instance );
 
          Postfix( __instance );

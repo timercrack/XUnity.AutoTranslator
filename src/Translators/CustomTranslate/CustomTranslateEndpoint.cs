@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Net;
 using System.Text;
 using SimpleJSON;
@@ -76,7 +75,7 @@ namespace CustomTranslate
          var expectedCount = context.UntranslatedTexts != null ? context.UntranslatedTexts.Length : 1;
          var raw = context.Response.Data;
 
-         var translations = TryParseBatchResponse( context, raw, expectedCount );
+         var translations = TryParseBatchResponse( raw, expectedCount );
 
          if( translations == null )
          {
@@ -123,29 +122,18 @@ namespace CustomTranslate
          return builder.ToString();
       }
 
-      private static string[] TryParseBatchResponse( IHttpTranslationExtractionContext context, string data, int expectedCount )
+      private static string[] TryParseBatchResponse( string data, int expectedCount )
       {
          if( string.IsNullOrEmpty( data ) ) return null;
 
-         var parsed = ParseJsonTranslations( context, data, expectedCount );
-         if( parsed != null )
-         {
-            return parsed;
-         }
-
-         return ParseLineSeparatedTranslations( data, expectedCount );
+         return ParseJsonTranslations( data, expectedCount );
       }
 
-      private static string[] ParseJsonTranslations( IHttpTranslationExtractionContext context, string data, int expectedCount )
+      private static string[] ParseJsonTranslations( string data, int expectedCount )
       {
          try
          {
-            var trimmed = StripCodeFences( data );
-            var looksLikeJson = LooksLikeJson( context, trimmed );
-
-            if( !looksLikeJson ) return null;
-
-            var node = JSON.Parse( trimmed );
+            var node = JSON.Parse( data );
             if( node == null ) return null;
 
             JSONArray array = node as JSONArray;
@@ -171,62 +159,6 @@ namespace CustomTranslate
          {
             return null;
          }
-      }
-
-      private static string[] ParseLineSeparatedTranslations( string data, int expectedCount )
-      {
-         var lines = data.Replace( "\r", string.Empty ).Split( new[] { '\n' }, StringSplitOptions.None );
-
-         if( lines.Length != expectedCount ) return null;
-
-         for( int i = 0; i < lines.Length; i++ )
-         {
-            lines[ i ] = lines[ i ] ?? string.Empty;
-         }
-
-         return lines;
-      }
-
-      private static bool LooksLikeJson( IHttpTranslationExtractionContext context, string data )
-      {
-         if( string.IsNullOrEmpty( data ) ) return false;
-
-         var headers = context.Response != null ? context.Response.Headers : null;
-         if( headers != null )
-         {
-            var contentType = headers[ "Content-Type" ];
-            if( !string.IsNullOrEmpty( contentType ) && contentType.IndexOf( "json", StringComparison.OrdinalIgnoreCase ) >= 0 )
-            {
-               return true;
-            }
-         }
-
-         var trimmed = data.TrimStart();
-         return trimmed.StartsWith( "{" ) || trimmed.StartsWith( "[" );
-      }
-
-      private static string StripCodeFences( string data )
-      {
-         if( string.IsNullOrEmpty( data ) ) return data;
-
-         var trimmed = data.Trim();
-         if( trimmed.StartsWith( "```" ) )
-         {
-            var newlineIndex = trimmed.IndexOf( '\n' );
-            if( newlineIndex >= 0 )
-            {
-               trimmed = trimmed.Substring( newlineIndex + 1 );
-            }
-
-            if( trimmed.EndsWith( "```", StringComparison.Ordinal ) )
-            {
-               trimmed = trimmed.Substring( 0, trimmed.Length - 3 );
-            }
-
-            return trimmed.Trim();
-         }
-
-         return data;
       }
    }
 }

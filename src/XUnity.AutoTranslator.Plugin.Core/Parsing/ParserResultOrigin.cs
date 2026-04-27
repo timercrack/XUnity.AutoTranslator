@@ -2,7 +2,6 @@
 {
    internal enum ParserResultOrigin
    {
-      LiteralNewlineParser,
       RichTextParser,
       RegexTextParser,
       GameLogTextParser,

@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using UnityEngine;
 using XUnity.AutoTranslator.Plugin.Core.Constants;
 using XUnity.AutoTranslator.Plugin.Core.Debugging;
@@ -110,7 +111,9 @@ namespace XUnity.AutoTranslator.Plugin.Core.Configuration
       public static float? ResizeUILineSpacingScale;
       public static bool ForceUIResizing;
       public static string[] IgnoreTextStartingWith;
+      public static List<Regex> IgnoreTextRegexes;
       public static HashSet<string> GameLogTextPaths;
+      public static HashSet<string> IgnoreStabilizationPaths;
       public static HashSet<string> BlacklistPaths;
       public static HashSet<string> WhitelistPaths;
       public static bool TextGetterCompatibilityMode;
@@ -127,6 +130,9 @@ namespace XUnity.AutoTranslator.Plugin.Core.Configuration
       public static bool EnableSilentMode;
       public static HashSet<string> BlacklistedIMGUIPlugins;
       public static bool EnableTextPathLogging;
+      public static bool EnableUIPathInspector;
+      public static HashSet<string> TextPathLoggingIgnoredPaths;
+      public static float PeriodicManualHookIntervalSeconds;
       public static bool OutputUntranslatableText;
       public static bool IgnoreVirtualTextSetterCallingRules;
       public static int MaxTextParserRecursion;
@@ -257,10 +263,14 @@ namespace XUnity.AutoTranslator.Plugin.Core.Configuration
             ForceUIResizing = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "ForceUIResizing", false );
             IgnoreTextStartingWith = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "IgnoreTextStartingWith", "\\u180e;" )
                ?.Split( new[] { ';' }, StringSplitOptions.RemoveEmptyEntries ).Select( x => JsonHelper.Unescape( x ) ).ToArray() ?? new string[ 0 ];
+            IgnoreTextRegexes = ParseRegexCollection( PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "IgnoreTextRegexes", string.Empty ), "IgnoreTextRegexes" );
             TextGetterCompatibilityMode = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "TextGetterCompatibilityMode", false );
             GameLogTextPaths = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "GameLogTextPaths", string.Empty )
                ?.Split( new[] { ';' }, StringSplitOptions.RemoveEmptyEntries ).ToHashSet() ?? new HashSet<string>();
             GameLogTextPaths.RemoveWhere( x => !x.StartsWith( "/" ) ); // clean up to ensure no 'empty' entries
+            IgnoreStabilizationPaths = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "IgnoreStabilizationPaths", string.Empty )
+               ?.Split( new[] { ';' }, StringSplitOptions.RemoveEmptyEntries ).ToHashSet() ?? new HashSet<string>();
+            IgnoreStabilizationPaths.RemoveWhere( x => !x.StartsWith( "/" ) );
             BlacklistPaths = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "BlacklistPaths", string.Empty )
                ?.Split( new[] { ';' }, StringSplitOptions.RemoveEmptyEntries ).ToHashSet() ?? new HashSet<string>();
             BlacklistPaths.RemoveWhere( x => !x.StartsWith( "/" ) );
@@ -284,6 +294,11 @@ namespace XUnity.AutoTranslator.Plugin.Core.Configuration
                .Where( x => !string.IsNullOrEmpty( x ) )
                .ToHashSet( StringComparer.OrdinalIgnoreCase ) ?? new HashSet<string>( StringComparer.OrdinalIgnoreCase );
             EnableTextPathLogging = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "EnableTextPathLogging", false );
+            EnableUIPathInspector = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "EnableUIPathInspector", false );
+            TextPathLoggingIgnoredPaths = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "TextPathLoggingIgnoredPaths", string.Empty )
+               ?.Split( new[] { ';' }, StringSplitOptions.RemoveEmptyEntries ).ToHashSet() ?? new HashSet<string>();
+            TextPathLoggingIgnoredPaths.RemoveWhere( x => !x.StartsWith( "/" ) );
+            PeriodicManualHookIntervalSeconds = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "PeriodicManualHookIntervalSeconds", 0.0f );
             OutputUntranslatableText = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "OutputUntranslatableText", false );
             IgnoreVirtualTextSetterCallingRules = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "IgnoreVirtualTextSetterCallingRules", false );
             MaxTextParserRecursion = PluginEnvironment.Current.Preferences.GetOrDefault( "Behaviour", "MaxTextParserRecursion", 1 );
@@ -328,6 +343,19 @@ namespace XUnity.AutoTranslator.Plugin.Core.Configuration
 
                ClipboardDebounceTime = 0.1f;
 
+            }
+
+            if( PeriodicManualHookIntervalSeconds < 0f )
+            {
+               XuaLogger.AutoTranslator.Warn( "'PeriodicManualHookIntervalSeconds' must not be negative. Disabling periodic manual hook..." );
+
+               PeriodicManualHookIntervalSeconds = 0f;
+            }
+            else if( PeriodicManualHookIntervalSeconds > 0f && PeriodicManualHookIntervalSeconds < 0.1f )
+            {
+               XuaLogger.AutoTranslator.Warn( "'PeriodicManualHookIntervalSeconds' must not be lower than 0.1 when enabled. Setting it to that..." );
+
+               PeriodicManualHookIntervalSeconds = 0.1f;
             }
 
             if( CacheMetadataForAllFiles && EnableDumping )
@@ -403,6 +431,30 @@ namespace XUnity.AutoTranslator.Plugin.Core.Configuration
          Save();
       }
 
+      private static List<Regex> ParseRegexCollection( string rawPatterns, string settingName )
+      {
+         var regexes = new List<Regex>();
+         if( string.IsNullOrEmpty( rawPatterns ) ) return regexes;
+
+         var patterns = rawPatterns.Split( new[] { ';' }, StringSplitOptions.RemoveEmptyEntries );
+         foreach( var rawPattern in patterns )
+         {
+            var pattern = rawPattern.Trim();
+            if( pattern.Length == 0 ) continue;
+
+            try
+            {
+               regexes.Add( new Regex( pattern, RegexOptions.None ) );
+            }
+            catch( Exception e )
+            {
+               XuaLogger.AutoTranslator.Warn( e, $"Failed to parse regex '{pattern}' from setting '{settingName}'. Ignoring that regex." );
+            }
+         }
+
+         return regexes;
+      }
+
       public static void SetEndpoint( string id )
       {
          id = id ?? string.Empty;
@@ -425,6 +477,13 @@ namespace XUnity.AutoTranslator.Plugin.Core.Configuration
       {
          EnableSilentMode = enabled;
          PluginEnvironment.Current.Preferences[ "Behaviour" ][ "EnableSilentMode" ].Value = enabled.ToString( CultureInfo.InvariantCulture );
+         Save();
+      }
+
+      public static void SetUIPathInspector( bool enabled )
+      {
+         EnableUIPathInspector = enabled;
+         PluginEnvironment.Current.Preferences[ "Behaviour" ][ "EnableUIPathInspector" ].Value = enabled.ToString( CultureInfo.InvariantCulture );
          Save();
       }
 

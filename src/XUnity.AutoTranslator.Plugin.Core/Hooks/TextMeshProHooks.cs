@@ -71,9 +71,9 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.TextMeshPro
 
       static void MM_Detour( object __instance, string value )
       {
-         _original( __instance, value );
+         value = AutoTranslationPlugin.Current.Hook_TextChanged_WithResult( __instance, value, true ) ?? value;
 
-         Postfix( __instance );
+         _original( __instance, value );
       }
    }
 
@@ -137,9 +137,9 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.TextMeshPro
 
       static void MM_Detour( object __instance, string value )
       {
-         _original( __instance, value );
+         value = AutoTranslationPlugin.Current.Hook_TextChanged_WithResult( __instance, value, true ) ?? value;
 
-         Postfix( __instance );
+         _original( __instance, value );
       }
    }
 #endif
@@ -180,9 +180,13 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.TextMeshPro
 
       static void MM_Detour( Component __instance, StringBuilder value )
       {
-         _original( __instance, value );
+         var translated = AutoTranslationPlugin.Current.Hook_TextChanged_WithResult( __instance, value?.ToString(), false );
+         if( translated != null )
+         {
+            value = new StringBuilder( translated );
+         }
 
-         Postfix( __instance );
+         _original( __instance, value );
       }
 #endif
    }
@@ -215,9 +219,9 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.TextMeshPro
 
       static void MM_Detour( Component __instance, string value, bool arg2 )
       {
-         _original( __instance, value, arg2 );
+         value = AutoTranslationPlugin.Current.Hook_TextChanged_WithResult( __instance, value, false ) ?? value;
 
-         Postfix( __instance );
+         _original( __instance, value, arg2 );
       }
 #endif
    }
@@ -252,9 +256,9 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.TextMeshPro
 
       static void MM_Detour( Component __instance, string value, float arg2, float arg3, float arg4 )
       {
-         _original( __instance, value, arg2, arg3, arg4 );
+         value = AutoTranslationPlugin.Current.Hook_TextChanged_WithResult( __instance, value, false ) ?? value;
 
-         Postfix( __instance );
+         _original( __instance, value, arg2, arg3, arg4 );
       }
 #endif
    }
@@ -291,9 +295,13 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.TextMeshPro
 
       static void MM_Detour( Component __instance, char[] value )
       {
-         _original( __instance, value );
+         var translated = AutoTranslationPlugin.Current.Hook_TextChanged_WithResult( __instance, value != null ? new string( value ) : null, false );
+         if( translated != null )
+         {
+            value = translated.ToCharArray();
+         }
 
-         Postfix( __instance );
+         _original( __instance, value );
       }
 #endif
    }
@@ -330,9 +338,35 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.TextMeshPro
 
       static void MM_Detour( Component __instance, char[] value, int arg2, int arg3 )
       {
-         _original( __instance, value, arg2, arg3 );
+         string text = null;
+         if( value != null )
+         {
+            var start = arg2 < 0 ? 0 : arg2;
+            var length = arg3 < 0 ? 0 : arg3;
+            if( start < value.Length )
+            {
+               if( start + length > value.Length )
+               {
+                  length = value.Length - start;
+               }
 
-         Postfix( __instance );
+               text = new string( value, start, length );
+            }
+            else
+            {
+               text = string.Empty;
+            }
+         }
+
+         var translated = AutoTranslationPlugin.Current.Hook_TextChanged_WithResult( __instance, text, false );
+         if( translated != null )
+         {
+            value = translated.ToCharArray();
+            arg2 = 0;
+            arg3 = value.Length;
+         }
+
+         _original( __instance, value, arg2, arg3 );
       }
 #endif
    }
@@ -369,9 +403,40 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.TextMeshPro
 
       static void MM_Detour( Component __instance, int[] value, int arg2, int arg3 )
       {
-         _original( __instance, value, arg2, arg3 );
+         string text = null;
+         if( value != null )
+         {
+            var start = arg2 < 0 ? 0 : arg2;
+            var length = arg3 < 0 ? 0 : arg3;
+            if( start < value.Length )
+            {
+               if( start + length > value.Length )
+               {
+                  length = value.Length - start;
+               }
 
-         Postfix( __instance );
+               var chars = new char[ length ];
+               for( int i = 0; i < length; i++ )
+               {
+                  chars[ i ] = (char)value[ start + i ];
+               }
+               text = new string( chars );
+            }
+            else
+            {
+               text = string.Empty;
+            }
+         }
+
+         var translated = AutoTranslationPlugin.Current.Hook_TextChanged_WithResult( __instance, text, false );
+         if( translated != null )
+         {
+            value = translated.Select( x => (int)x ).ToArray();
+            arg2 = 0;
+            arg3 = value.Length;
+         }
+
+         _original( __instance, value, arg2, arg3 );
       }
 #endif
    }
@@ -394,6 +459,11 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.TextMeshPro
          AutoTranslationPlugin.Current.Hook_TextChanged( __instance, true );
       }
 
+      static void _Prefix( Component __instance )
+      {
+         AutoTranslationPlugin.Current.Hook_TextChanged_BeforeEnable( __instance );
+      }
+
       static void Postfix( Component __instance )
       {
 #if IL2CPP
@@ -401,6 +471,15 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.TextMeshPro
 #endif
 
          _Postfix( __instance );
+      }
+
+      static void Prefix( Component __instance )
+      {
+#if IL2CPP
+         __instance = (Component)Il2CppUtilities.CreateProxyComponentWithDerivedType( __instance.Pointer, UnityTypes.TextMeshProUGUI.ClrType );
+#endif
+
+         _Prefix( __instance );
       }
 
 #if IL2CPP
@@ -411,9 +490,12 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.TextMeshPro
 
       static void ML_Detour( IntPtr instance )
       {
+         var __instance = (Component)Il2CppUtilities.CreateProxyComponentWithDerivedType( instance, UnityTypes.TextMeshProUGUI.ClrType );
+         _Prefix( __instance );
+
          Il2CppUtilities.InvokeMethod( UnityTypes.TextMeshProUGUI_Methods.IL2CPP.OnEnable, instance );
 
-         var __instance = (Component)Il2CppUtilities.CreateProxyComponentWithDerivedType( instance, UnityTypes.TextMeshProUGUI.ClrType );
+         __instance = (Component)Il2CppUtilities.CreateProxyComponentWithDerivedType( instance, UnityTypes.TextMeshProUGUI.ClrType );
          _Postfix( __instance );
       }
 #endif
@@ -428,6 +510,8 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.TextMeshPro
 
       static void MM_Detour( Component __instance )
       {
+         Prefix( __instance );
+
          _original( __instance );
 
          Postfix( __instance );
@@ -453,6 +537,11 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.TextMeshPro
          AutoTranslationPlugin.Current.Hook_TextChanged( __instance, true );
       }
 
+      static void _Prefix( Component __instance )
+      {
+         AutoTranslationPlugin.Current.Hook_TextChanged_BeforeEnable( __instance );
+      }
+
       static void Postfix( Component __instance )
       {
 #if IL2CPP
@@ -460,6 +549,15 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.TextMeshPro
 #endif
 
          _Postfix( __instance );
+      }
+
+      static void Prefix( Component __instance )
+      {
+#if IL2CPP
+         __instance = (Component)Il2CppUtilities.CreateProxyComponentWithDerivedType( __instance.Pointer, UnityTypes.TextMeshPro.ClrType );
+#endif
+
+         _Prefix( __instance );
       }
 
 #if IL2CPP
@@ -470,9 +568,12 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.TextMeshPro
 
       static void ML_Detour( IntPtr instance )
       {
+         var __instance = (Component)Il2CppUtilities.CreateProxyComponentWithDerivedType( instance, UnityTypes.TextMeshPro.ClrType );
+         _Prefix( __instance );
+
          Il2CppUtilities.InvokeMethod( UnityTypes.TextMeshPro_Methods.IL2CPP.OnEnable, instance );
 
-         var __instance = (Component)Il2CppUtilities.CreateProxyComponentWithDerivedType( instance, UnityTypes.TextMeshPro.ClrType );
+         __instance = (Component)Il2CppUtilities.CreateProxyComponentWithDerivedType( instance, UnityTypes.TextMeshPro.ClrType );
          _Postfix( __instance );
       }
 #endif
@@ -487,6 +588,8 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.TextMeshPro
 
       static void MM_Detour( Component __instance )
       {
+         Prefix( __instance );
+
          _original( __instance );
 
          Postfix( __instance );
@@ -546,9 +649,9 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.TextMeshPro
 
       static void MM_Detour( Component __instance, string value )
       {
-         _original( __instance, value );
+         value = AutoTranslationPlugin.Current.Hook_TextChanged_WithResult( __instance, value, false ) ?? value;
 
-         Postfix( __instance );
+         _original( __instance, value );
       }
 #endif
    }

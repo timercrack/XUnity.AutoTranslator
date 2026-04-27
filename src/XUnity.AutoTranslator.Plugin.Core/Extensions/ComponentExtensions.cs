@@ -289,9 +289,35 @@ namespace XUnity.AutoTranslator.Plugin.Core.Extensions
          }
       }
 
+      public static bool ShouldIgnoreStabilizationDelay( this object ui )
+      {
+         if( Settings.IgnoreStabilizationPaths != null && Settings.IgnoreStabilizationPaths.Count > 0 )
+         {
+            if( ui is Component component && component )
+            {
+               var go = component.gameObject;
+               if( go )
+               {
+                  var path = go.GetPath();
+                  if( !string.IsNullOrEmpty( path ) && MatchesPath( path, Settings.IgnoreStabilizationPaths ) )
+                  {
+                     return true;
+                  }
+               }
+            }
+         }
+
+         return false;
+      }
+
       public static bool SupportsStabilization( this object ui )
       {
          if( ui == null ) return false;
+
+         if( ui.ShouldIgnoreStabilizationDelay() )
+         {
+            return false;
+         }
 
          return _guiContentCheckFailed || !IsGUIContentSafe( ui );
       }
@@ -376,7 +402,7 @@ namespace XUnity.AutoTranslator.Plugin.Core.Extensions
                if( go )
                {
                   var path = go.GetPath();
-                  return !string.IsNullOrEmpty( path ) && Settings.GameLogTextPaths.Contains( path );
+                  return !string.IsNullOrEmpty( path ) && MatchesPath( path, Settings.GameLogTextPaths );
                }
             }
          }

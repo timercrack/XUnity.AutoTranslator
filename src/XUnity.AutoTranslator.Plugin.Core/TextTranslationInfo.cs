@@ -36,6 +36,7 @@ namespace XUnity.AutoTranslator.Plugin.Core
       public bool IsCurrentlySettingText { get; set; }
 
       public bool IsStabilizingText { get; set; }
+      public bool HasPendingIgnorePathRescan { get; set; }
       public bool IsKnownTextComponent { get; set; }
       public bool SupportsStabilization { get; set; }
       public bool ShouldIgnore { get; set; }
@@ -151,11 +152,6 @@ namespace XUnity.AutoTranslator.Plugin.Core
                   )
                   {
                      copyMaterial = _FontMaterialCopies[ oldMaterial ] = UnityEngine.Object.Instantiate( oldMaterial );
-
-                     // Keep original font
-                     var uiCopy = UnityEngine.Object.Instantiate( ui as UnityEngine.Object );
-                     fontProperty.Set( uiCopy, previousFont );
-                     fontMaterialProperty.Set( uiCopy, oldMaterial );
 
                      // Copy required material properties
                      copyMaterial.SetTexture( "_MainTex", newMaterial.GetTexture( "_MainTex" ) );

@@ -52,6 +52,22 @@ namespace XUnity.AutoTranslator.Plugin.Core
       IInternalTranslator,
       ITranslationRegistry
    {
+      private sealed class UiPathInspectorCandidate
+      {
+         public string Path;
+         public string ComponentType;
+         public string Text;
+         public Rect ScreenRect;
+         public float Area;
+         public int Depth;
+         public int SortingOrder;
+         public bool IsExactHit;
+         public bool IsRaycastHit;
+         public bool IsPreciseTextHit;
+         public int RaycastRank;
+         public float DistanceToMouse;
+      }
+
       /// <summary>
       /// Allow the instance to be accessed statically, as only one will exist.
       /// </summary>
@@ -79,6 +95,23 @@ namespace XUnity.AutoTranslator.Plugin.Core
       private List<string> _textsToCopyToClipboardOrdered = new List<string>();
       private HashSet<string> _textsToCopyToClipboard = new HashSet<string>();
       private float _clipboardUpdated = 0.0f;
+      private const int LoggedTextPathEntryCacheLimit = 4096;
+      private const float UiPathInspectorRefreshIntervalSeconds = 0.15f;
+      private const float UiPathInspectorSceneScanIntervalSeconds = 1.0f;
+      private const int UiPathInspectorMaxCandidates = 5;
+      private HashSet<string> _loggedTextPathEntries = new HashSet<string>( StringComparer.Ordinal );
+      private Queue<string> _loggedTextPathEntriesOrdered = new Queue<string>();
+      private List<UiPathInspectorCandidate> _uiPathInspectorCandidates = new List<UiPathInspectorCandidate>();
+      private List<object> _uiPathInspectorSceneTextComponents = new List<object>();
+      private Vector3[] _uiPathInspectorWorldCorners = new Vector3[ 4 ];
+      private Vector3 _lastUiPathInspectorMousePosition = new Vector3( float.NaN, float.NaN, float.NaN );
+      private float _nextUiPathInspectorRefreshTime = 0.0f;
+      private float _nextUiPathInspectorSceneScanTime = 0.0f;
+      private bool _uiPathInspectorShowingNearbyCandidates = false;
+      private int _uiPathInspectorLastKnownTextComponentCount = 0;
+      private int _uiPathInspectorLastScreenRectCount = 0;
+      private int _uiPathInspectorLastPathResolvedCount = 0;
+      private int _uiPathInspectorLastExactHitCount = 0;
 
       /// <summary>
       /// Texts currently being scheduled for translation by 'immediate' components.
@@ -87,6 +120,7 @@ namespace XUnity.AutoTranslator.Plugin.Core
 
       private bool _isInTranslatedMode = true;
       private bool _textHooksEnabled = true;
+      private bool _inputSupported = true;
 
       private float _batchOperationSecondCounter = 0;
 
@@ -97,6 +131,7 @@ namespace XUnity.AutoTranslator.Plugin.Core
       private bool _temporarilyDisabled = false;
       private string _requireSpriteRendererCheckCausedBy = null;
       private int _lastSpriteUpdateFrame = -1;
+      private float _nextPeriodicManualHookTime = 0.0f;
       private bool _isCalledFromSceneManager = false;
       private bool _translationReloadRequest = false;
       private bool _hasUiBeenSetup = false;
@@ -364,6 +399,11 @@ namespace XUnity.AutoTranslator.Plugin.Core
                   "<b>SHOWN</b>\nThe translation aggregator window is shown.",
                   "<b>HIDDEN</b>\nThe translation aggregator window is not shown.",
                   ToggleTranslationAggregator, () => TranslationAggregatorWindow != null && TranslationAggregatorWindow.IsShown ),
+               new ToggleViewModel(
+                  " UI Path Inspector",
+                  "<b>SHOWN</b>\nShows the hovered text component path in a floating overlay. Useful for locating GameObject paths under the mouse.",
+                  "<b>HIDDEN</b>\nThe UI path inspector overlay is hidden.",
+                  ToggleUIPathInspector, () => Settings.EnableUIPathInspector ),
             },
             new DropdownViewModel<TranslatorDropdownOptionViewModel, TranslationEndpointManager>(
                "----",
@@ -404,6 +444,41 @@ namespace XUnity.AutoTranslator.Plugin.Core
          if( TranslationAggregatorWindow != null )
          {
             TranslationAggregatorWindow.IsShown = !TranslationAggregatorWindow.IsShown;
+         }
+      }
+
+      private void ToggleUIPathInspector()
+      {
+         var enabled = !Settings.EnableUIPathInspector;
+         Settings.SetUIPathInspector( enabled );
+
+         _uiPathInspectorCandidates.Clear();
+         _uiPathInspectorSceneTextComponents.Clear();
+         _lastUiPathInspectorMousePosition = new Vector3( float.NaN, float.NaN, float.NaN );
+         _nextUiPathInspectorRefreshTime = 0f;
+         _nextUiPathInspectorSceneScanTime = 0f;
+         _uiPathInspectorShowingNearbyCandidates = false;
+         _uiPathInspectorLastKnownTextComponentCount = 0;
+         _uiPathInspectorLastScreenRectCount = 0;
+         _uiPathInspectorLastPathResolvedCount = 0;
+         _uiPathInspectorLastExactHitCount = 0;
+
+         if( enabled )
+         {
+            try
+            {
+               ManualHookForComponents();
+            }
+            catch( Exception e )
+            {
+               XuaLogger.AutoTranslator.Warn( e, "An error occurred while priming UI path inspector." );
+            }
+
+            XuaLogger.AutoTranslator.Info( "Enabled UI path inspector. Hover text with the mouse to inspect its path. Inspector now actively scans scene text components. Press ALT+I to hide it." );
+         }
+         else
+         {
+            XuaLogger.AutoTranslator.Info( "Disabled UI path inspector." );
          }
       }
 
@@ -719,6 +794,56 @@ namespace XUnity.AutoTranslator.Plugin.Core
          }
       }
 
+      private bool ShouldLogTranslatedTextPath( string componentType, string path, int scope, string text )
+      {
+         var key = string.Join(
+            "\u001f",
+            new[]
+            {
+               componentType ?? string.Empty,
+               path ?? string.Empty,
+               scope.ToString( CultureInfo.InvariantCulture ),
+               text ?? string.Empty
+            } );
+
+         if( _loggedTextPathEntries.Contains( key ) )
+         {
+            return false;
+         }
+
+         _loggedTextPathEntries.Add( key );
+         _loggedTextPathEntriesOrdered.Enqueue( key );
+
+         while( _loggedTextPathEntriesOrdered.Count > LoggedTextPathEntryCacheLimit )
+         {
+            var removed = _loggedTextPathEntriesOrdered.Dequeue();
+            _loggedTextPathEntries.Remove( removed );
+         }
+
+         return true;
+      }
+
+      private void LogTranslatedTextPath( object ui, string text )
+      {
+         var path = ui.GetPath();
+         var ignoredPaths = Settings.TextPathLoggingIgnoredPaths;
+         if( path == null || ( ignoredPaths != null && PathMatching.MatchesPath( path, ignoredPaths ) ) )
+         {
+            return;
+         }
+
+         var scope = TranslationScopeHelper.GetScope( ui );
+         var componentType = ui.GetType().FullName;
+         if( !ShouldLogTranslatedTextPath( componentType, path, scope, text ) )
+         {
+            return;
+         }
+
+         XuaLogger.AutoTranslator.Info( $"Setting text on '{componentType}' to '{text}'" );
+         XuaLogger.AutoTranslator.Info( "Path : " + path );
+         XuaLogger.AutoTranslator.Info( "Level: " + scope );
+      }
+
       internal string Hook_TextChanged_WithResult( object ui, string text, bool onEnable )
       {
          try
@@ -739,6 +864,7 @@ namespace XUnity.AutoTranslator.Plugin.Core
                   CallOrigin.ExpectsTextToBeReturned = true;
 
                   result = TranslateOrQueueWebJob( ui, text, isComponentActive, info );
+                  ScheduleIgnorePathRescan( ui, info );
                }
                catch( Exception e )
                {
@@ -762,6 +888,34 @@ namespace XUnity.AutoTranslator.Plugin.Core
          }
       }
 
+      internal void Hook_TextChanged_BeforeEnable( object ui )
+      {
+         if( _textHooksEnabled && !_temporarilyDisabled )
+         {
+            try
+            {
+               var info = ui.GetOrCreateTextTranslationInfo();
+               DiscoverComponent( ui, info );
+
+               if( info != null && CallOrigin.TextCache != null )
+               {
+                  info.TextCache = CallOrigin.TextCache;
+               }
+
+               TranslateOrQueueWebJob( ui, null, true, info );
+               ScheduleIgnorePathRescan( ui, info );
+            }
+            catch( Exception e )
+            {
+               XuaLogger.AutoTranslator.Warn( e, "An unexpected error occurred." );
+            }
+            finally
+            {
+               _hasResizedCurrentComponentDuringDiscovery = false;
+            }
+         }
+      }
+
       internal void Hook_TextChanged( object ui, bool onEnable )
       {
          if( _textHooksEnabled && !_temporarilyDisabled )
@@ -779,6 +933,7 @@ namespace XUnity.AutoTranslator.Plugin.Core
                //XuaLogger.AutoTranslator.Warn( ui.GetText( info ) );
 
                TranslateOrQueueWebJob( ui, null, isComponentActive, info );
+               ScheduleIgnorePathRescan( ui, info );
             }
             catch( Exception e )
             {
@@ -793,6 +948,85 @@ namespace XUnity.AutoTranslator.Plugin.Core
          if( onEnable )
          {
             CheckSpriteRenderer( ui );
+         }
+      }
+
+      private void ScheduleIgnorePathRescan( object ui, TextTranslationInfo info )
+      {
+         if( ui == null || info == null ) return;
+         if( info.HasPendingIgnorePathRescan ) return;
+         if( info.IsTranslated || info.IsCurrentlySettingText ) return;
+         if( !ui.ShouldIgnoreStabilizationDelay() ) return;
+
+         info.HasPendingIgnorePathRescan = true;
+         CoroutineHelper.Start( RescanIgnoredPathText( ui, info, 15, 0.1f ) );
+      }
+
+      private IEnumerator RescanIgnoredPathText( object ui, TextTranslationInfo info, int retries, float delay )
+      {
+         try
+         {
+            for( int i = 0; i < retries; i++ )
+            {
+               var instruction = CoroutineHelper.CreateWaitForSecondsRealtime( delay );
+               if( instruction != null )
+               {
+                  yield return instruction;
+               }
+               else
+               {
+                  float start = Time.realtimeSinceStartup;
+                  var end = start + delay;
+                  while( Time.realtimeSinceStartup < end )
+                  {
+                     yield return null;
+                  }
+               }
+
+               if( Settings.IsShutdown )
+               {
+                  yield break;
+               }
+
+               if( ui is Component component && !component )
+               {
+                  yield break;
+               }
+
+               if( info == null )
+               {
+                  yield break;
+               }
+
+               if( info.IsTranslated )
+               {
+                  yield break;
+               }
+
+               if( info.IsCurrentlySettingText )
+               {
+                  continue;
+               }
+
+               if( !ui.ShouldIgnoreStabilizationDelay() )
+               {
+                  yield break;
+               }
+
+               Hook_TextChanged( ui, false );
+
+               if( info.IsTranslated )
+               {
+                  yield break;
+               }
+            }
+         }
+         finally
+         {
+            if( info != null )
+            {
+               info.HasPendingIgnorePathRescan = false;
+            }
          }
       }
 
@@ -886,20 +1120,52 @@ namespace XUnity.AutoTranslator.Plugin.Core
          }
       }
 
+      private static string ApplyConfiguredPostprocessors( string translatedText )
+      {
+         if( string.IsNullOrEmpty( translatedText ) || Settings.Postprocessors.Count == 0 )
+         {
+            return translatedText;
+         }
+
+         foreach( var kvp in Settings.Postprocessors )
+         {
+            translatedText = translatedText.Replace( kvp.Key, kvp.Value );
+         }
+
+         return translatedText;
+      }
+
       internal void SetTranslatedText( object ui, string translatedText, string originalText, TextTranslationInfo info )
       {
+         SetTranslatedText( ui, translatedText, originalText, info, false );
+      }
+
+      internal void SetTranslatedText( object ui, string translatedText, string originalText, TextTranslationInfo info, bool shouldLogTranslatedTextPath )
+      {
+         translatedText = ApplyConfiguredPostprocessors( translatedText );
          info?.SetTranslatedText( translatedText );
 
          if( _isInTranslatedMode && !CallOrigin.ExpectsTextToBeReturned )
          {
-            SetText( ui, translatedText, true, originalText, info );
+            SetText( ui, translatedText, true, originalText, info, shouldLogTranslatedTextPath );
          }
+      }
+
+      private static bool ShouldApplyCompletedTranslation( string currentText, string expectedOriginalText, TextTranslationInfo info )
+      {
+         return currentText == expectedOriginalText
+            || info?.OriginalText == expectedOriginalText;
       }
 
       /// <summary>
       /// Sets the text of a UI  text, while ensuring this will not fire a text changed event.
       /// </summary>
       private void SetText( object ui, string text, bool isTranslated, string originalText, TextTranslationInfo info )
+      {
+         SetText( ui, text, isTranslated, originalText, info, false );
+      }
+
+      private void SetText( object ui, string text, bool isTranslated, string originalText, TextTranslationInfo info, bool shouldLogTranslatedTextPath )
       {
          if( !info?.IsCurrentlySettingText ?? true )
          {
@@ -912,16 +1178,9 @@ namespace XUnity.AutoTranslator.Plugin.Core
                   info.IsCurrentlySettingText = true;
                }
 
-               if( Settings.EnableTextPathLogging )
+               if( Settings.EnableTextPathLogging && shouldLogTranslatedTextPath && isTranslated && originalText != null )
                {
-                  var path = ui.GetPath();
-                  if( path != null )
-                  {
-                     var scope = TranslationScopeHelper.GetScope( ui );
-                     XuaLogger.AutoTranslator.Info( $"Setting text on '{ui.GetType().FullName}' to '{text}'" );
-                     XuaLogger.AutoTranslator.Info( "Path : " + path );
-                     XuaLogger.AutoTranslator.Info( "Level: " + scope );
-                  }
+                  LogTranslatedTextPath( ui, text );
                }
 
                if( !_hasResizedCurrentComponentDuringDiscovery && info != null && ( Settings.EnableUIResizing || Settings.ForceUIResizing ) )
@@ -986,10 +1245,20 @@ namespace XUnity.AutoTranslator.Plugin.Core
       private string TranslateOrQueueWebJob( object ui, string text, bool ignoreComponentState, TextTranslationInfo info )
       {
          var tc = CallOrigin.GetTextCache( info, TextCache );
+         var supportsLineParser = ui != null && UnityTextParsers.GameLogTextParser.CanApply( ui );
+         var ignoreStabilizationDelay = ui != null && ui.ShouldIgnoreStabilizationDelay();
+         var allowStabilizationOnTextComponent = info.GetSupportsStabilization() && !supportsLineParser;
 
          if( info != null && info.IsStabilizingText == true )
          {
-            return TranslateImmediate( ui, text, info, ignoreComponentState, tc );
+            if( ignoreStabilizationDelay )
+            {
+               info.IsStabilizingText = false;
+            }
+            else
+            {
+               return TranslateImmediate( ui, text, info, ignoreComponentState, tc );
+            }
          }
 
          return TranslateOrQueueWebJobImmediate(
@@ -997,9 +1266,9 @@ namespace XUnity.AutoTranslator.Plugin.Core
             text,
             TranslationScopes.None,
             info,
-            info.GetSupportsStabilization(),
+            allowStabilizationOnTextComponent,
             ignoreComponentState,
-            false,
+            ignoreStabilizationDelay,
             tc.AllowGeneratingNewTranslations,
             tc,
             null,
@@ -1464,22 +1733,6 @@ namespace XUnity.AutoTranslator.Plugin.Core
                      }
                   }
                }
-
-               if( UnityTextParsers.LiteralNewlineParser != null )
-               {
-                  var result = UnityTextParsers.LiteralNewlineParser.Parse( text, scope, tc );
-                  if( result != null )
-                  {
-                     var isTranslatable = LanguageHelper.IsTranslatable( textKey.TemplatedOriginal_Text );
-                     translation = TranslateOrQueueWebJobImmediateByParserResult( ui, result, scope, false, false, isTranslatable || Settings.OutputUntranslatableText, tc, null );
-                     if( translation != null )
-                     {
-                        var isPartial = tc.IsPartial( textKey.TemplatedOriginal_Text, scope );
-                        SetTranslatedText( ui, translation, !isPartial ? originalText : null, info );
-                        return translation;
-                     }
-                  }
-               }
             }
          }
 
@@ -1604,15 +1857,8 @@ namespace XUnity.AutoTranslator.Plugin.Core
             else
             {
                ParserResult parserResult = null;
-               if( UnityTextParsers.LiteralNewlineParser != null )
-               {
-                  parserResult = UnityTextParsers.LiteralNewlineParser.Parse( text, scope, TextCache );
-               }
 
-               if( parserResult == null )
-               {
-                  parserResult = UnityTextParsers.RegexSplittingTextParser.Parse( text, scope, TextCache );
-               }
+               parserResult = UnityTextParsers.RegexSplittingTextParser.Parse( text, scope, TextCache );
 
                if( parserResult == null )
                {
@@ -1675,21 +1921,6 @@ namespace XUnity.AutoTranslator.Plugin.Core
                {
                   if( context.GetLevelsOfRecursion() < Settings.MaxTextParserRecursion )
                   {
-                     if( UnityTextParsers.LiteralNewlineParser != null && !context.HasBeenParsedBy( ParserResultOrigin.LiteralNewlineParser ) )
-                     {
-                        var newlineParserResult = UnityTextParsers.LiteralNewlineParser.Parse( text, scope, TextCache );
-                        if( newlineParserResult != null )
-                        {
-                           translation = TranslateByParserResult( endpoint, newlineParserResult, scope, result, allowStartTranslateImmediate, result.IsGlobal, allowFallback, context );
-                           if( translation != null )
-                           {
-                              result.SetCompleted( translation );
-                           }
-
-                           return result;
-                        }
-                     }
-
                      var parserResult = UnityTextParsers.RegexSplittingTextParser.Parse( text, scope, TextCache );
                      if( parserResult != null )
                      {
@@ -1805,21 +2036,6 @@ namespace XUnity.AutoTranslator.Plugin.Core
                {
                   if( context.GetLevelsOfRecursion() < Settings.MaxTextParserRecursion )
                   {
-                     if( UnityTextParsers.LiteralNewlineParser != null && !context.HasBeenParsedBy( ParserResultOrigin.LiteralNewlineParser ) )
-                     {
-                        var newlineParserResult = UnityTextParsers.LiteralNewlineParser.Parse( text, TranslationScopes.None, TextCache );
-                        if( newlineParserResult != null )
-                        {
-                           translation = TranslateByParserResult( endpoint, newlineParserResult, TranslationScopes.None, result, allowStartTranslateImmediate, result.IsGlobal, allowFallback, context );
-                           if( translation != null )
-                           {
-                              result.SetCompleted( translation );
-                           }
-
-                           return result;
-                        }
-                     }
-
                      var parserResult = UnityTextParsers.RegexSplittingTextParser.Parse( text, TranslationScopes.None, TextCache );
                      if( parserResult != null )
                      {
@@ -1959,7 +2175,7 @@ namespace XUnity.AutoTranslator.Plugin.Core
                   return untranslatedTextPart ?? string.Empty;
                }
 
-               return null;
+               return GetSpecializedParsedTextFallback( untranslatedTextInfoPart );
             } );
 
 
@@ -2021,7 +2237,7 @@ namespace XUnity.AutoTranslator.Plugin.Core
                   return untranslatedTextPart ?? string.Empty;
                }
 
-               return null;
+               return GetSpecializedParsedTextFallback( untranslatedTextInfoPart );
             } );
 
 
@@ -2032,6 +2248,16 @@ namespace XUnity.AutoTranslator.Plugin.Core
 
             return translation;
          }
+      }
+
+      private static string GetSpecializedParsedTextFallback( UntranslatedTextInfo untranslatedTextInfoPart )
+      {
+         if( untranslatedTextInfoPart is GameLogSpecializedUntranslatedTextInfo )
+         {
+            return untranslatedTextInfoPart.UntranslatedText ?? string.Empty;
+         }
+
+         return null;
       }
 
       private bool CheckAndFixRedirected( object ui, string text, TextTranslationInfo info )
@@ -2160,6 +2386,30 @@ namespace XUnity.AutoTranslator.Plugin.Core
 
             // if we already have translation loaded in our _translatios dictionary, simply load it and set text
             string translation;
+            var isTranslatable = LanguageHelper.IsTranslatable( textKey.TemplatedOriginal_Text );
+
+            if( !isSpammer )
+            {
+               if( context.GetLevelsOfRecursion() < Settings.MaxTextParserRecursion )
+               {
+                  if( UnityTextParsers.GameLogTextParser.CanApply( ui ) && context == null ) // only at the first layer!
+                  {
+                     var result = UnityTextParsers.GameLogTextParser.Parse( text, scope, tc );
+                     if( result != null )
+                     {
+                        translation = TranslateOrQueueWebJobImmediateByParserResult( ui, result, scope, allowStartTranslationImmediate, allowStartTranslationLater && !allowStabilizationOnTextComponent, isTranslatable || Settings.OutputUntranslatableText, tc, context );
+                        if( translation != null )
+                        {
+                           SetTranslatedText( ui, translation, null, info );
+                           return translation;
+                        }
+
+                        return null;
+                     }
+                  }
+               }
+            }
+
             if( tc.TryGetTranslation( textKey, !isSpammer, false, scope, out translation ) )
             {
                var untemplatedTranslation = textKey.Untemplate( translation );
@@ -2172,53 +2422,10 @@ namespace XUnity.AutoTranslator.Plugin.Core
             }
             else
             {
-               var isTranslatable = LanguageHelper.IsTranslatable( textKey.TemplatedOriginal_Text );
                if( !isSpammer )
                {
                   if( context.GetLevelsOfRecursion() < Settings.MaxTextParserRecursion )
                   {
-                     if( UnityTextParsers.GameLogTextParser.CanApply( ui ) && context == null ) // only at the first layer!
-                     {
-                        var result = UnityTextParsers.GameLogTextParser.Parse( text, scope, tc );
-                        if( result != null )
-                        {
-                           translation = TranslateOrQueueWebJobImmediateByParserResult( ui, result, scope, allowStartTranslationImmediate, allowStartTranslationLater && !allowStabilizationOnTextComponent, isTranslatable || Settings.OutputUntranslatableText, tc, context );
-                           if( translation != null )
-                           {
-                              if( context == null )
-                              {
-                                 SetTranslatedText( ui, translation, null, info );
-                              }
-                              return translation;
-                           }
-
-                           if( context != null )
-                           {
-                              return null;
-                           }
-                        }
-                     }
-                     if( UnityTextParsers.LiteralNewlineParser != null && !context.HasBeenParsedBy( ParserResultOrigin.LiteralNewlineParser ) )
-                     {
-                        var result = UnityTextParsers.LiteralNewlineParser.Parse( text, scope, tc );
-                        if( result != null )
-                        {
-                           translation = TranslateOrQueueWebJobImmediateByParserResult( ui, result, scope, allowStartTranslationImmediate, allowStartTranslationLater && !allowStabilizationOnTextComponent, isTranslatable || Settings.OutputUntranslatableText, tc, context );
-                           if( translation != null )
-                           {
-                              if( context == null )
-                              {
-                                 SetTranslatedText( ui, translation, text, info );
-                              }
-                              return translation;
-                           }
-
-                           if( context != null )
-                           {
-                              return null;
-                           }
-                        }
-                     }
                      if( UnityTextParsers.RegexSplittingTextParser.CanApply( ui ) )
                      {
                         var result = UnityTextParsers.RegexSplittingTextParser.Parse( text, scope, tc );
@@ -2358,6 +2565,7 @@ namespace XUnity.AutoTranslator.Plugin.Core
                   {
                      // potentially shortcircuit if templated is a translation
                      var stabilizedTextKey = GetCacheKey( stabilizedText, false );
+                     var isStabilizedTranslatable = LanguageHelper.IsTranslatable( stabilizedTextKey.TemplatedOriginal_Text );
 
                      // potentially shortcircuit if fully templated
                      if( ( stabilizedTextKey.IsTemplated && !tc.IsTranslatable( stabilizedTextKey.TemplatedOriginal_Text, false, scope ) ) || stabilizedTextKey.IsOnlyTemplate )
@@ -2365,6 +2573,20 @@ namespace XUnity.AutoTranslator.Plugin.Core
                         var untemplatedTranslation = stabilizedTextKey.Untemplate( stabilizedTextKey.TemplatedOriginal_Text );
                         SetTranslatedText( ui, untemplatedTranslation, text, info );
                         return;
+                     }
+
+                     if( UnityTextParsers.GameLogTextParser.CanApply( ui ) && context == null )
+                     {
+                        var result = UnityTextParsers.GameLogTextParser.Parse( stabilizedText, scope, tc );
+                        if( result != null )
+                        {
+                           var translatedText = TranslateOrQueueWebJobImmediateByParserResult( ui, result, scope, true, false, isStabilizedTranslatable || Settings.OutputUntranslatableText, tc, context );
+                           if( translatedText != null && context == null )
+                           {
+                              SetTranslatedText( ui, translatedText, null, info );
+                           }
+                           return;
+                        }
                      }
 
                      // once the text has stabilized, attempt to look it up
@@ -2376,34 +2598,6 @@ namespace XUnity.AutoTranslator.Plugin.Core
                      else
                      {
                         // PREMISE: context should ALWAYS be null inside this method! That means we initialize the first layer of text parser recursion from here
-
-                        var isStabilizedTranslatable = LanguageHelper.IsTranslatable( stabilizedTextKey.TemplatedOriginal_Text );
-                        if( UnityTextParsers.GameLogTextParser.CanApply( ui ) && context == null )
-                        {
-                           var result = UnityTextParsers.GameLogTextParser.Parse( stabilizedText, scope, tc );
-                           if( result != null )
-                           {
-                              var translatedText = TranslateOrQueueWebJobImmediateByParserResult( ui, result, scope, true, false, isStabilizedTranslatable || Settings.OutputUntranslatableText, tc, context );
-                              if( translatedText != null && context == null )
-                              {
-                                 SetTranslatedText( ui, translatedText, null, info );
-                              }
-                              return;
-                           }
-                        }
-                        if( UnityTextParsers.LiteralNewlineParser != null && !context.HasBeenParsedBy( ParserResultOrigin.LiteralNewlineParser ) )
-                        {
-                           var result = UnityTextParsers.LiteralNewlineParser.Parse( stabilizedText, scope, tc );
-                           if( result != null )
-                           {
-                              var translatedText = TranslateOrQueueWebJobImmediateByParserResult( ui, result, scope, true, false, isStabilizedTranslatable || Settings.OutputUntranslatableText, tc, context );
-                              if( translatedText != null && context == null )
-                              {
-                                 SetTranslatedText( ui, translatedText, text, info );
-                              }
-                              return;
-                           }
-                        }
                         if( UnityTextParsers.RegexSplittingTextParser.CanApply( ui ) )
                         {
                            var result = UnityTextParsers.RegexSplittingTextParser.Parse( stabilizedText, scope, tc );
@@ -2589,7 +2783,7 @@ namespace XUnity.AutoTranslator.Plugin.Core
                return untranslatedTextPart ?? string.Empty;
             }
 
-            return null;
+            return GetSpecializedParsedTextFallback( untranslatedTextInfoPart );
          } );
 
          try
@@ -2624,6 +2818,13 @@ namespace XUnity.AutoTranslator.Plugin.Core
          while( currentTries < maxTries ) // shortcircuit
          {
             var beforeText = ui.GetText( info );
+
+            if( ui != null && ui.ShouldIgnoreStabilizationDelay() )
+            {
+               onTextStabilized( beforeText );
+               succeeded = true;
+               break;
+            }
 
             var instruction = CoroutineHelper.CreateWaitForSecondsRealtime( delay );
             if( instruction != null )
@@ -2833,25 +3034,23 @@ namespace XUnity.AutoTranslator.Plugin.Core
             }
             catch( Exception e )
             {
-               XuaLogger.AutoTranslator.Error( e, "An unexpected error occurred during plugin start." );
+               XuaLogger.AutoTranslator.Warn( e, "An error occurred while starting plugin hook loading." );
             }
          }
       }
 
-      private static bool _inputSupported = true;
       private void HandleInputSafe()
       {
-         if( _inputSupported )
+         if( !_inputSupported ) return;
+
+         try
          {
-            try
-            {
-               HandleInput();
-            }
-            catch( Exception e )
-            {
-               _inputSupported = false;
-               XuaLogger.AutoTranslator.Warn( e, "Input API is not available!" );
-            }
+            HandleInput();
+         }
+         catch( Exception e )
+         {
+            _inputSupported = false;
+            XuaLogger.AutoTranslator.Warn( e, "Input API is not available!" );
          }
       }
 
@@ -2877,6 +3076,10 @@ namespace XUnity.AutoTranslator.Plugin.Core
             else if( UnityInput.Current.GetKeyDown( KeyCode.U ) )
             {
                ManualHook();
+            }
+            else if( UnityInput.Current.GetKeyDown( KeyCode.I ) )
+            {
+               ToggleUIPathInspector();
             }
             else if( UnityInput.Current.GetKeyDown( KeyCode.Q ) )
             {
@@ -2947,10 +3150,13 @@ namespace XUnity.AutoTranslator.Plugin.Core
 
                UpdateSpriteRenderers();
                IncrementBatchOperations();
+               PerformPeriodicManualHook();
                KickoffTranslations();
 
                TranslationAggregatorWindow?.Update();
             }
+
+            UpdateUiPathInspector();
 
             if( _translationReloadRequest )
             {
@@ -3041,6 +3247,8 @@ namespace XUnity.AutoTranslator.Plugin.Core
                   TranslationAggregatorOptionsWindow = null;
                }
             }
+
+            RenderUiPathInspectorOverlay();
          }
          finally
          {
@@ -3062,6 +3270,881 @@ namespace XUnity.AutoTranslator.Plugin.Core
       private void KickoffTranslations()
       {
          TranslationManager.KickoffTranslations();
+      }
+
+      private void PerformPeriodicManualHook()
+      {
+         var interval = Settings.PeriodicManualHookIntervalSeconds;
+         if( interval <= 0f ) return;
+         if( TranslationManager.OngoingTranslations != 0 || TranslationManager.UnstartedTranslations != 0 ) return;
+
+         var now = Time.realtimeSinceStartup;
+         if( now < _nextPeriodicManualHookTime ) return;
+
+         _nextPeriodicManualHookTime = now + interval;
+
+         try
+         {
+            ManualHookForComponents();
+         }
+         catch( Exception e )
+         {
+            XuaLogger.AutoTranslator.Warn( e, "An error occurred during periodic manual hook." );
+         }
+      }
+
+      private void UpdateUiPathInspector()
+      {
+         if( !Settings.EnableUIPathInspector || !_inputSupported ) return;
+
+         var mousePosition = UnityInput.Current.mousePosition;
+         var now = Time.realtimeSinceStartup;
+         var hasMoved = float.IsNaN( _lastUiPathInspectorMousePosition.x )
+            || ( mousePosition - _lastUiPathInspectorMousePosition ).sqrMagnitude >= 9f;
+
+         if( !hasMoved && now < _nextUiPathInspectorRefreshTime )
+         {
+            return;
+         }
+
+         _lastUiPathInspectorMousePosition = mousePosition;
+         _nextUiPathInspectorRefreshTime = now + UiPathInspectorRefreshIntervalSeconds;
+
+         RefreshUiPathInspector( mousePosition );
+
+         if( _uiPathInspectorCandidates.Count > 0 && UnityInput.Current.GetMouseButtonDown( 0 ) )
+         {
+            LogUiPathInspectorCandidate( _uiPathInspectorCandidates[ 0 ] );
+         }
+      }
+
+      private void RefreshUiPathInspector( Vector3 mousePosition )
+      {
+         RefreshUiPathInspectorSceneTextComponents();
+
+         _uiPathInspectorCandidates.Clear();
+         _uiPathInspectorShowingNearbyCandidates = false;
+         _uiPathInspectorLastKnownTextComponentCount = 0;
+         _uiPathInspectorLastScreenRectCount = 0;
+         _uiPathInspectorLastPathResolvedCount = 0;
+         _uiPathInspectorLastExactHitCount = 0;
+
+         var seen = new HashSet<string>( StringComparer.Ordinal );
+         var nearbyCandidates = new Dictionary<string, UiPathInspectorCandidate>( StringComparer.Ordinal );
+         var raycastHitRanks = GetUiPathInspectorRaycastHitRanks( new Vector2( mousePosition.x, mousePosition.y ) );
+
+         foreach( var kvp in ExtensionDataHelper.GetAllRegisteredObjects() )
+         {
+            if( kvp.Value is TextTranslationInfo info )
+            {
+               TryAddUiPathInspectorCandidate( kvp.Key, info, mousePosition, raycastHitRanks, seen, nearbyCandidates, false );
+            }
+         }
+
+         for( int i = 0; i < _uiPathInspectorSceneTextComponents.Count; i++ )
+         {
+            var ui = _uiPathInspectorSceneTextComponents[ i ];
+            if( ui != null )
+            {
+               TryAddUiPathInspectorCandidate( ui, null, mousePosition, raycastHitRanks, seen, nearbyCandidates, true );
+            }
+         }
+
+         if( _uiPathInspectorCandidates.Count > 0 )
+         {
+            _uiPathInspectorCandidates.Sort( CompareUiPathInspectorCandidates );
+            TrimUiPathInspectorCandidates();
+            return;
+         }
+
+         if( nearbyCandidates.Count > 0 )
+         {
+            _uiPathInspectorShowingNearbyCandidates = true;
+            _uiPathInspectorCandidates.AddRange( nearbyCandidates.Values );
+            _uiPathInspectorCandidates.Sort( CompareUiPathInspectorNearbyCandidates );
+            TrimUiPathInspectorCandidates();
+         }
+      }
+
+      private Dictionary<int, int> GetUiPathInspectorRaycastHitRanks( Vector2 mousePoint )
+      {
+         var ranks = new Dictionary<int, int>();
+
+         try
+         {
+            var eventSystemType = FindLoadedType( "UnityEngine.EventSystems.EventSystem" );
+            var pointerEventDataType = FindLoadedType( "UnityEngine.EventSystems.PointerEventData" );
+            var raycastResultType = FindLoadedType( "UnityEngine.EventSystems.RaycastResult" );
+            if( eventSystemType == null || pointerEventDataType == null || raycastResultType == null ) return ranks;
+
+            var currentEventSystem = eventSystemType.CachedProperty( "current" )?.Get( null );
+            if( currentEventSystem == null ) return ranks;
+
+            var pointerEventData = Activator.CreateInstance( pointerEventDataType, currentEventSystem );
+            pointerEventDataType.CachedProperty( "position" )?.Set( pointerEventData, mousePoint );
+
+            var resultsType = typeof( List<> ).MakeGenericType( raycastResultType );
+            var results = Activator.CreateInstance( resultsType ) as IList;
+            if( results == null ) return ranks;
+
+            var raycastAll = eventSystemType.GetMethod( "RaycastAll", BindingFlags.Public | BindingFlags.Instance, null, new[] { pointerEventDataType, resultsType }, null );
+            if( raycastAll == null ) return ranks;
+
+            raycastAll.Invoke( currentEventSystem, new[] { pointerEventData, (object)results } );
+
+            var gameObjectProperty = raycastResultType.CachedProperty( "gameObject" );
+            for( int i = 0; i < results.Count; i++ )
+            {
+               var go = gameObjectProperty?.Get( results[ i ] ) as GameObject;
+               if( go == null || !go ) continue;
+
+               CollectUiPathInspectorRaycastTextComponents( go, i, ranks );
+            }
+         }
+         catch
+         {
+         }
+
+         return ranks;
+      }
+
+      private void CollectUiPathInspectorRaycastTextComponents( GameObject go, int rank, Dictionary<int, int> ranks )
+      {
+         if( go == null || !go ) return;
+
+         if( TryCollectUiPathInspectorRaycastTextComponentsFromGameObject( go, rank, ranks ) ) return;
+
+         var parent = go.transform?.parent;
+         for( int i = 0; i < 2 && parent != null; i++ )
+         {
+            if( TryCollectUiPathInspectorRaycastTextComponentsFromGameObject( parent.gameObject, rank, ranks ) ) return;
+            parent = parent.parent;
+         }
+
+         CollectUiPathInspectorRaycastTextComponentsFromChildren( go.transform, rank, ranks, 2 );
+      }
+
+      private bool TryCollectUiPathInspectorRaycastTextComponentsFromGameObject( GameObject go, int rank, Dictionary<int, int> ranks )
+      {
+         if( go == null || !go ) return false;
+
+         bool found = false;
+         var components = go.GetComponents<Component>();
+         if( components == null ) return false;
+
+         for( int i = 0; i < components.Length; i++ )
+         {
+            var component = components[ i ];
+            if( component == null || !component ) continue;
+            if( !component.IsKnownTextType() ) continue;
+
+            found = true;
+            RegisterUiPathInspectorRaycastTextComponent( component, rank, ranks );
+         }
+
+         return found;
+      }
+
+      private void CollectUiPathInspectorRaycastTextComponentsFromChildren( Transform transform, int rank, Dictionary<int, int> ranks, int remainingDepth )
+      {
+         if( transform == null || remainingDepth <= 0 ) return;
+
+         var childCount = transform.childCount;
+         for( int i = 0; i < childCount; i++ )
+         {
+            var child = transform.GetChild( i );
+            if( child == null ) continue;
+
+            if( TryCollectUiPathInspectorRaycastTextComponentsFromGameObject( child.gameObject, rank, ranks ) )
+            {
+               continue;
+            }
+
+            CollectUiPathInspectorRaycastTextComponentsFromChildren( child, rank, ranks, remainingDepth - 1 );
+         }
+      }
+
+      private static void RegisterUiPathInspectorRaycastTextComponent( Component component, int rank, Dictionary<int, int> ranks )
+      {
+         var gameObject = component.gameObject;
+         if( gameObject == null || !gameObject ) return;
+
+         var id = gameObject.GetInstanceID();
+         if( !ranks.TryGetValue( id, out var existingRank ) || rank < existingRank )
+         {
+            ranks[ id ] = rank;
+         }
+      }
+
+      private static Type FindLoadedType( string fullName )
+      {
+         if( string.IsNullOrEmpty( fullName ) ) return null;
+
+         var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+         for( int i = 0; i < assemblies.Length; i++ )
+         {
+            var type = assemblies[ i ].GetType( fullName, false );
+            if( type != null ) return type;
+         }
+
+         return null;
+      }
+
+      private void TrimUiPathInspectorCandidates()
+      {
+         if( _uiPathInspectorCandidates.Count > UiPathInspectorMaxCandidates )
+         {
+            _uiPathInspectorCandidates.RemoveRange( UiPathInspectorMaxCandidates, _uiPathInspectorCandidates.Count - UiPathInspectorMaxCandidates );
+         }
+      }
+
+      private void RefreshUiPathInspectorSceneTextComponents()
+      {
+         var now = Time.realtimeSinceStartup;
+         if( _uiPathInspectorSceneTextComponents.Count > 0 && now < _nextUiPathInspectorSceneScanTime )
+         {
+            return;
+         }
+
+         _nextUiPathInspectorSceneScanTime = now + UiPathInspectorSceneScanIntervalSeconds;
+         _uiPathInspectorSceneTextComponents.Clear();
+
+         var components = ComponentHelper.FindObjectsOfType<Component>();
+         if( components == null || components.Length == 0 ) return;
+
+         foreach( var component in components )
+         {
+            if( component == null || !component || !component.gameObject ) continue;
+
+            object textComponent;
+            try
+            {
+               textComponent = component.CreateDerivedProxyIfRequiredAndPossible();
+            }
+            catch
+            {
+               continue;
+            }
+
+            if( textComponent != null )
+            {
+               _uiPathInspectorSceneTextComponents.Add( textComponent );
+            }
+         }
+      }
+
+      private void TryAddUiPathInspectorCandidate( object ui, TextTranslationInfo info, Vector3 mousePosition, Dictionary<int, int> raycastHitRanks, HashSet<string> seen, Dictionary<string, UiPathInspectorCandidate> nearbyCandidates, bool knownTextComponentGuaranteed )
+      {
+         if( !( ui is Component component ) || !component || !component.gameObject ) return;
+         if( !ui.IsComponentActive() ) return;
+
+         if( !knownTextComponentGuaranteed )
+         {
+            if( !info.GetIsKnownTextComponent() ) return;
+         }
+         else
+         {
+            info = ui.GetTextTranslationInfo() ?? ui.GetOrCreateTextTranslationInfo();
+            if( !info.GetIsKnownTextComponent() ) return;
+         }
+
+         _uiPathInspectorLastKnownTextComponentCount++;
+
+         if( !TryGetUiPathInspectorScreenRect( component, out var screenRect, out var sortingOrder, out var area ) ) return;
+         if( area <= 0f ) return;
+
+         _uiPathInspectorLastScreenRectCount++;
+
+         string path;
+         try
+         {
+            path = component.GetPath();
+         }
+         catch
+         {
+            return;
+         }
+
+         if( string.IsNullOrEmpty( path ) ) return;
+
+         _uiPathInspectorLastPathResolvedCount++;
+
+         info = info ?? ui.GetTextTranslationInfo() ?? ui.GetOrCreateTextTranslationInfo();
+
+         var mousePoint = new Vector2( mousePosition.x, mousePosition.y );
+         var isExactHit = screenRect.Contains( mousePoint );
+         var distanceToMouse = GetUiPathInspectorDistanceToRect( screenRect, mousePoint );
+         var raycastRank = int.MaxValue;
+         var isRaycastHit = raycastHitRanks != null && raycastHitRanks.TryGetValue( component.gameObject.GetInstanceID(), out raycastRank );
+         var isPreciseTextHit = false;
+
+         if( component.transform.TryCastTo<RectTransform>( out var rectTransform ) )
+         {
+            TryRefineUiPathInspectorRectTransformMouseRelation( rectTransform, component, mousePoint, screenRect, ref isExactHit, ref distanceToMouse );
+         }
+
+         TryRefineUiPathInspectorTextMouseRelation( component, mousePoint, ref isExactHit, ref distanceToMouse, ref isPreciseTextHit );
+
+         if( isRaycastHit )
+         {
+            isExactHit = true;
+            distanceToMouse = 0f;
+         }
+
+         var componentType = component.GetType().FullName;
+         var key = componentType + "\u001f" + path;
+         var candidate = new UiPathInspectorCandidate
+         {
+            Path = path,
+            ComponentType = componentType,
+            Text = TryGetUiPathInspectorText( ui, info ),
+            ScreenRect = screenRect,
+            Area = area,
+            Depth = GetUiPathInspectorDepth( path ),
+            SortingOrder = sortingOrder,
+            IsExactHit = isExactHit,
+            IsRaycastHit = isRaycastHit,
+            IsPreciseTextHit = isPreciseTextHit,
+            RaycastRank = raycastRank,
+            DistanceToMouse = distanceToMouse
+         };
+
+         if( candidate.IsExactHit )
+         {
+            if( !seen.Add( key ) ) return;
+
+            nearbyCandidates.Remove( key );
+            _uiPathInspectorLastExactHitCount++;
+            _uiPathInspectorCandidates.Add( candidate );
+            return;
+         }
+
+         if( nearbyCandidates.TryGetValue( key, out var existingCandidate ) )
+         {
+            if( CompareUiPathInspectorNearbyCandidates( candidate, existingCandidate ) < 0 )
+            {
+               nearbyCandidates[ key ] = candidate;
+            }
+         }
+         else
+         {
+            nearbyCandidates.Add( key, candidate );
+         }
+      }
+
+      private void TryRefineUiPathInspectorRectTransformMouseRelation( RectTransform rectTransform, Component component, Vector2 mousePoint, Rect fallbackScreenRect, ref bool isExactHit, ref float distanceToMouse )
+      {
+         var canvasType = UnityTypes.Object?.ClrType?.Assembly?.GetType( "UnityEngine.Canvas" );
+         var canvas = canvasType != null
+            ? component.gameObject.GetFirstComponentInSelfOrAncestor( canvasType )
+            : null;
+         var camera = GetUiPathInspectorCamera( canvas );
+
+         if( TryConvertUiPathInspectorScreenPointToRectLocalPoint( rectTransform, mousePoint, camera, out var localPoint ) )
+         {
+            var localRect = rectTransform.rect;
+            isExactHit = localRect.Contains( localPoint );
+            distanceToMouse = GetUiPathInspectorDistanceToRect( localRect, localPoint );
+            return;
+         }
+
+         isExactHit = fallbackScreenRect.Contains( mousePoint );
+         distanceToMouse = GetUiPathInspectorDistanceToRect( fallbackScreenRect, mousePoint );
+      }
+
+      private void TryRefineUiPathInspectorTextMouseRelation( Component component, Vector2 mousePoint, ref bool isExactHit, ref float distanceToMouse, ref bool isPreciseTextHit )
+      {
+         var canvasType = UnityTypes.Object?.ClrType?.Assembly?.GetType( "UnityEngine.Canvas" );
+         var canvas = canvasType != null
+            ? component.gameObject.GetFirstComponentInSelfOrAncestor( canvasType )
+            : null;
+         var camera = GetUiPathInspectorCamera( canvas );
+
+         if( !TryGetUiPathInspectorPreciseTextHit( component, mousePoint, camera, out var preciseTextHit ) ) return;
+
+         isPreciseTextHit = preciseTextHit;
+         isExactHit = preciseTextHit;
+         if( preciseTextHit )
+         {
+            distanceToMouse = 0f;
+         }
+      }
+
+      private string TryGetUiPathInspectorText( object ui, TextTranslationInfo info )
+      {
+         try
+         {
+            var text = ui.GetText( info );
+            if( !string.IsNullOrEmpty( text ) ) return text;
+         }
+         catch
+         {
+         }
+
+         return info?.TranslatedText ?? info?.OriginalText ?? string.Empty;
+      }
+
+      private bool TryGetUiPathInspectorScreenRect( Component component, out Rect screenRect, out int sortingOrder, out float area )
+      {
+         screenRect = default( Rect );
+         sortingOrder = 0;
+         area = 0f;
+
+         var canvasType = UnityTypes.Object?.ClrType?.Assembly?.GetType( "UnityEngine.Canvas" );
+         var canvas = canvasType != null
+            ? component.gameObject.GetFirstComponentInSelfOrAncestor( canvasType )
+            : null;
+         if( canvas != null )
+         {
+            sortingOrder = (int?)canvas.GetType().CachedProperty( "sortingOrder" )?.Get( canvas ) ?? 0;
+         }
+
+         if( component.transform.TryCastTo<RectTransform>( out var rectTransform ) )
+         {
+            if( TryGetUiPathInspectorRectTransformScreenRect( rectTransform, canvas, out screenRect ) )
+            {
+               area = Mathf.Abs( screenRect.width * screenRect.height );
+               return true;
+            }
+         }
+
+         var renderer = component as Renderer ?? component.GetComponent<Renderer>();
+         if( renderer != null && TryGetUiPathInspectorRendererScreenRect( renderer, out screenRect ) )
+         {
+            area = Mathf.Abs( screenRect.width * screenRect.height );
+            return true;
+         }
+
+         return false;
+      }
+
+      private bool TryGetUiPathInspectorRectTransformScreenRect( RectTransform rectTransform, object canvas, out Rect screenRect )
+      {
+         screenRect = default( Rect );
+
+         var camera = GetUiPathInspectorCamera( canvas );
+         rectTransform.GetWorldCorners( _uiPathInspectorWorldCorners );
+
+         var anyVisible = false;
+         var minX = float.PositiveInfinity;
+         var minY = float.PositiveInfinity;
+         var maxX = float.NegativeInfinity;
+         var maxY = float.NegativeInfinity;
+
+         for( int i = 0; i < _uiPathInspectorWorldCorners.Length; i++ )
+         {
+            var worldCorner = _uiPathInspectorWorldCorners[ i ];
+            Vector3 screenPoint;
+
+            if( !TryProjectUiPathInspectorRectTransformPoint( camera, worldCorner, out screenPoint ) )
+            {
+               return false;
+            }
+
+            if( camera != null )
+            {
+               if( screenPoint.z > 0f )
+               {
+                  anyVisible = true;
+               }
+            }
+            else
+            {
+               anyVisible = true;
+            }
+
+            minX = Mathf.Min( minX, screenPoint.x );
+            minY = Mathf.Min( minY, screenPoint.y );
+            maxX = Mathf.Max( maxX, screenPoint.x );
+            maxY = Mathf.Max( maxY, screenPoint.y );
+         }
+
+         if( !anyVisible ) return false;
+
+         screenRect = Rect.MinMaxRect( minX, minY, maxX, maxY );
+         return screenRect.width > 0f && screenRect.height > 0f;
+      }
+
+      private static bool TryProjectUiPathInspectorRectTransformPoint( object camera, Vector3 worldPoint, out Vector3 screenPoint )
+      {
+         if( camera != null )
+         {
+            return TryProjectUiPathInspectorPoint( camera, worldPoint, out screenPoint );
+         }
+
+         screenPoint = worldPoint;
+
+         var objectAssembly = UnityTypes.Object?.ClrType?.Assembly;
+         var rectTransformUtilityType = objectAssembly?.GetType( "UnityEngine.RectTransformUtility" );
+         var cameraType = objectAssembly?.GetType( "UnityEngine.Camera" );
+         var method = rectTransformUtilityType?.CachedMethod( "WorldToScreenPoint", cameraType, typeof( Vector3 ) );
+         if( method == null )
+         {
+            return true;
+         }
+
+         var projected = method.Invoke( null, new object[] { null, worldPoint } );
+         if( projected is Vector2 vector2 )
+         {
+            screenPoint = new Vector3( vector2.x, vector2.y, 1f );
+            return true;
+         }
+
+         if( projected is Vector3 vector3 )
+         {
+            screenPoint = vector3;
+            if( screenPoint.z == 0f )
+            {
+               screenPoint.z = 1f;
+            }
+            return true;
+         }
+
+         return false;
+      }
+
+      private static bool TryConvertUiPathInspectorScreenPointToRectLocalPoint( RectTransform rectTransform, Vector2 screenPoint, object camera, out Vector2 localPoint )
+      {
+         localPoint = default( Vector2 );
+
+         var objectAssembly = UnityTypes.Object?.ClrType?.Assembly;
+         var rectTransformUtilityType = objectAssembly?.GetType( "UnityEngine.RectTransformUtility" );
+         var cameraType = objectAssembly?.GetType( "UnityEngine.Camera" );
+         var method = rectTransformUtilityType?.GetMethod(
+            "ScreenPointToLocalPointInRectangle",
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
+            null,
+            new[] { typeof( RectTransform ), typeof( Vector2 ), cameraType, typeof( Vector2 ).MakeByRefType() },
+            null );
+         if( method == null )
+         {
+            return false;
+         }
+
+         var args = new object[] { rectTransform, screenPoint, camera, localPoint };
+         var result = method.Invoke( null, args );
+         if( args[ 3 ] is Vector2 converted )
+         {
+            localPoint = converted;
+         }
+
+         return result is bool success && success;
+      }
+
+      private static bool TryGetUiPathInspectorPreciseTextHit( Component component, Vector2 mousePoint, object camera, out bool preciseTextHit )
+      {
+         preciseTextHit = false;
+
+         var unityType = component.GetUnityType();
+         var tmpTextType = UnityTypes.TMP_Text?.ClrType ?? UnityTypes.TextMeshProUGUI?.ClrType ?? UnityTypes.TextMeshPro?.ClrType;
+         if( tmpTextType == null ) return false;
+
+         var isTmpText = UnityTypes.TMP_Text != null
+            ? UnityTypes.TMP_Text.IsAssignableFrom( unityType )
+            : ( UnityTypes.TextMeshProUGUI?.IsAssignableFrom( unityType ) == true || UnityTypes.TextMeshPro?.IsAssignableFrom( unityType ) == true );
+         if( !isTmpText ) return false;
+
+         var cameraType = UnityTypes.Object?.ClrType?.Assembly?.GetType( "UnityEngine.Camera" );
+         var textUtilitiesType = tmpTextType.Assembly.GetType( "TMPro.TMP_TextUtilities" );
+         var method = textUtilitiesType?.GetMethod(
+            "FindIntersectingCharacter",
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
+            null,
+            new[] { tmpTextType, typeof( Vector3 ), cameraType, typeof( bool ) },
+            null );
+         if( method == null ) return false;
+
+         var characterIndex = method.Invoke( null, new object[] { component, new Vector3( mousePoint.x, mousePoint.y, 0f ), camera, true } );
+         preciseTextHit = characterIndex is int index && index >= 0;
+         return true;
+      }
+
+      private bool TryGetUiPathInspectorRendererScreenRect( Renderer renderer, out Rect screenRect )
+      {
+         screenRect = default( Rect );
+
+         var camera = GetUiPathInspectorMainCamera();
+         if( camera == null ) return false;
+
+         var bounds = renderer.bounds;
+         var corners = new[]
+         {
+            new Vector3( bounds.min.x, bounds.min.y, bounds.min.z ),
+            new Vector3( bounds.min.x, bounds.min.y, bounds.max.z ),
+            new Vector3( bounds.min.x, bounds.max.y, bounds.min.z ),
+            new Vector3( bounds.min.x, bounds.max.y, bounds.max.z ),
+            new Vector3( bounds.max.x, bounds.min.y, bounds.min.z ),
+            new Vector3( bounds.max.x, bounds.min.y, bounds.max.z ),
+            new Vector3( bounds.max.x, bounds.max.y, bounds.min.z ),
+            new Vector3( bounds.max.x, bounds.max.y, bounds.max.z )
+         };
+
+         var anyVisible = false;
+         var minX = float.PositiveInfinity;
+         var minY = float.PositiveInfinity;
+         var maxX = float.NegativeInfinity;
+         var maxY = float.NegativeInfinity;
+
+         for( int i = 0; i < corners.Length; i++ )
+         {
+            if( !TryProjectUiPathInspectorPoint( camera, corners[ i ], out var screenPoint ) )
+            {
+               return false;
+            }
+
+            if( screenPoint.z > 0f )
+            {
+               anyVisible = true;
+            }
+
+            minX = Mathf.Min( minX, screenPoint.x );
+            minY = Mathf.Min( minY, screenPoint.y );
+            maxX = Mathf.Max( maxX, screenPoint.x );
+            maxY = Mathf.Max( maxY, screenPoint.y );
+         }
+
+         if( !anyVisible ) return false;
+
+         screenRect = Rect.MinMaxRect( minX, minY, maxX, maxY );
+         return screenRect.width > 0f && screenRect.height > 0f;
+      }
+
+      private static object GetUiPathInspectorCamera( object canvas )
+      {
+         if( canvas != null )
+         {
+            var renderMode = canvas.GetType().CachedProperty( "renderMode" )?.Get( canvas );
+            if( renderMode != null && !string.Equals( renderMode.ToString(), "ScreenSpaceOverlay", StringComparison.Ordinal ) )
+            {
+               return canvas.GetType().CachedProperty( "worldCamera" )?.Get( canvas ) ?? GetUiPathInspectorMainCamera();
+            }
+
+            return null;
+         }
+
+         return GetUiPathInspectorMainCamera();
+      }
+
+      private static object GetUiPathInspectorMainCamera()
+      {
+         var cameraType = UnityTypes.Object?.ClrType?.Assembly?.GetType( "UnityEngine.Camera" );
+         return cameraType?.CachedProperty( "main" )?.Get( null );
+      }
+
+      private static bool TryProjectUiPathInspectorPoint( object camera, Vector3 worldPoint, out Vector3 screenPoint )
+      {
+         screenPoint = worldPoint;
+         if( camera == null ) return true;
+
+         var method = camera.GetType().CachedMethod( "WorldToScreenPoint", typeof( Vector3 ) );
+         if( method == null ) return false;
+
+         var projected = method.Invoke( camera, new object[] { worldPoint } );
+         if( projected is Vector3 vector )
+         {
+            screenPoint = vector;
+            return true;
+         }
+
+         return false;
+      }
+
+      private static int CompareUiPathInspectorCandidates( UiPathInspectorCandidate x, UiPathInspectorCandidate y )
+      {
+         var comparison = x.RaycastRank.CompareTo( y.RaycastRank );
+         if( comparison != 0 ) return comparison;
+
+         comparison = y.IsPreciseTextHit.CompareTo( x.IsPreciseTextHit );
+         if( comparison != 0 ) return comparison;
+
+         comparison = y.SortingOrder.CompareTo( x.SortingOrder );
+         if( comparison != 0 ) return comparison;
+
+         comparison = y.Depth.CompareTo( x.Depth );
+         if( comparison != 0 ) return comparison;
+
+         comparison = x.Area.CompareTo( y.Area );
+         if( comparison != 0 ) return comparison;
+
+         return string.CompareOrdinal( x.Path, y.Path );
+      }
+
+      private static int CompareUiPathInspectorNearbyCandidates( UiPathInspectorCandidate x, UiPathInspectorCandidate y )
+      {
+         var comparison = x.DistanceToMouse.CompareTo( y.DistanceToMouse );
+         if( comparison != 0 ) return comparison;
+
+         return CompareUiPathInspectorCandidates( x, y );
+      }
+
+      private static float GetUiPathInspectorDistanceToRect( Rect screenRect, Vector2 point )
+      {
+         float dx = 0f;
+         if( point.x < screenRect.xMin )
+         {
+            dx = screenRect.xMin - point.x;
+         }
+         else if( point.x > screenRect.xMax )
+         {
+            dx = point.x - screenRect.xMax;
+         }
+
+         float dy = 0f;
+         if( point.y < screenRect.yMin )
+         {
+            dy = screenRect.yMin - point.y;
+         }
+         else if( point.y > screenRect.yMax )
+         {
+            dy = point.y - screenRect.yMax;
+         }
+
+         return ( dx * dx ) + ( dy * dy );
+      }
+
+      private static int GetUiPathInspectorDepth( string path )
+      {
+         if( string.IsNullOrEmpty( path ) ) return 0;
+
+         int depth = 0;
+         for( int i = 0; i < path.Length; i++ )
+         {
+            if( path[ i ] == '/' ) depth++;
+         }
+         return depth;
+      }
+
+      private void LogUiPathInspectorCandidate( UiPathInspectorCandidate candidate )
+      {
+         if( candidate == null ) return;
+
+         XuaLogger.AutoTranslator.Info( $"[UIPathInspector] Hovered '{candidate.ComponentType}'" );
+         XuaLogger.AutoTranslator.Info( "[UIPathInspector] Path : " + candidate.Path );
+         XuaLogger.AutoTranslator.Info( "[UIPathInspector] Text : " + ( candidate.Text ?? string.Empty ) );
+      }
+
+      private void RenderUiPathInspectorOverlay()
+      {
+         if( !Settings.EnableUIPathInspector ) return;
+
+         var mousePosition = UnityInput.Current.mousePosition;
+         var width = 580f;
+         var visibleCandidates = Mathf.Max( 1, _uiPathInspectorCandidates.Count );
+         var height = ( _uiPathInspectorShowingNearbyCandidates ? 170f : 146f ) + ( Mathf.Min( visibleCandidates, UiPathInspectorMaxCandidates ) * 34f );
+         var x = Mathf.Min( mousePosition.x + 18f, Mathf.Max( 10f, Screen.width - width - 10f ) );
+         var y = Mathf.Min( ( Screen.height - mousePosition.y ) + 18f, Mathf.Max( 10f, Screen.height - height - 10f ) );
+         var rect = GUIUtil.R( x, y, width, height );
+
+         GUI.Box( rect, GUIUtil.none, GUIUtil.GetWindowBackgroundStyle() );
+
+         float lineX = rect.x + GUIUtil.ComponentSpacing;
+         float lineY = rect.y + GUIUtil.ComponentSpacing;
+         float innerWidth = rect.width - ( GUIUtil.ComponentSpacing * 2 );
+
+         GUI.Label( GUIUtil.R( lineX, lineY, innerWidth, GUIUtil.RowHeight ), "<b>UI Path Inspector</b>  (ALT+I 关闭，左键写日志)", GUIUtil.LabelRich );
+         lineY += GUIUtil.RowHeight;
+
+         GUI.Label( GUIUtil.R( lineX, lineY, innerWidth, GUIUtil.RowHeight ), $"Mouse: {mousePosition.x:0}, {mousePosition.y:0}", GUIUtil.LabelTranslation );
+         lineY += GUIUtil.RowHeight;
+
+         GUI.Label( GUIUtil.R( lineX, lineY, innerWidth, GUIUtil.RowHeight ), $"Scanned text components: {_uiPathInspectorSceneTextComponents.Count}", GUIUtil.LabelTranslation );
+         lineY += GUIUtil.RowHeight;
+
+         GUI.Label( GUIUtil.R( lineX, lineY, innerWidth, GUIUtil.RowHeight ), $"Known text: {_uiPathInspectorLastKnownTextComponentCount}  Rect ok: {_uiPathInspectorLastScreenRectCount}  Path ok: {_uiPathInspectorLastPathResolvedCount}", GUIUtil.LabelTranslation );
+         lineY += GUIUtil.RowHeight;
+
+         GUI.Label( GUIUtil.R( lineX, lineY, innerWidth, GUIUtil.RowHeight ), $"Exact hits: {_uiPathInspectorLastExactHitCount}  Mode: {(_uiPathInspectorShowingNearbyCandidates ? "nearest" : "exact")}", GUIUtil.LabelTranslation );
+         lineY += GUIUtil.RowHeight;
+
+         if( _uiPathInspectorCandidates.Count == 0 )
+         {
+            GUI.Label( GUIUtil.R( lineX, lineY, innerWidth, GUIUtil.RowHeight * 2 ), "当前鼠标附近没有可显示路径的文本候选。若这块 UI 仍然有字，说明它可能不是 GameObject-backed 文本，或者它的可见区域和组件矩形严重不一致。", GUIUtil.LabelTranslation );
+            return;
+         }
+
+         if( _uiPathInspectorShowingNearbyCandidates )
+         {
+            GUI.Label( GUIUtil.R( lineX, lineY, innerWidth, GUIUtil.RowHeight ), "当前没有精确命中；下面显示离鼠标最近的文本候选。", GUIUtil.LabelTranslation );
+            lineY += GUIUtil.RowHeight;
+         }
+
+         var primary = _uiPathInspectorCandidates[ 0 ];
+         var primaryHitLabel = primary.IsRaycastHit ? "  [ray]" : ( primary.IsPreciseTextHit ? "  [text]" : ( primary.IsExactHit ? "  [rect]" : string.Empty ) );
+         GUI.Label( GUIUtil.R( lineX, lineY, innerWidth, GUIUtil.RowHeight ), "Type: " + primary.ComponentType + primaryHitLabel, GUIUtil.LabelTranslation );
+         lineY += GUIUtil.RowHeight;
+         var primaryPathLabel = _uiPathInspectorShowingNearbyCandidates
+            ? $"Path: {primary.Path}  (~{Mathf.Sqrt( primary.DistanceToMouse ):0}px)"
+            : "Path: " + primary.Path;
+         GUI.Label( GUIUtil.R( lineX, lineY, innerWidth, GUIUtil.RowHeight ), primaryPathLabel, GUIUtil.LabelTranslation );
+         lineY += GUIUtil.RowHeight;
+         GUI.Label( GUIUtil.R( lineX, lineY, innerWidth, GUIUtil.RowHeight ), "Text: " + FormatUiPathInspectorPreview( primary.Text ), GUIUtil.LabelTranslation );
+         lineY += GUIUtil.RowHeight + 4f;
+
+         if( _uiPathInspectorCandidates.Count > 1 )
+         {
+            GUI.Label( GUIUtil.R( lineX, lineY, innerWidth, GUIUtil.RowHeight ), _uiPathInspectorShowingNearbyCandidates ? "Other nearby candidates:" : "Also under cursor:", GUIUtil.LabelTranslation );
+            lineY += GUIUtil.RowHeight;
+
+            for( int i = 1; i < _uiPathInspectorCandidates.Count; i++ )
+            {
+               var candidate = _uiPathInspectorCandidates[ i ];
+               var distanceLabel = _uiPathInspectorShowingNearbyCandidates
+                  ? $" ~{Mathf.Sqrt( candidate.DistanceToMouse ):0}px"
+                  : string.Empty;
+               var hitLabel = candidate.IsRaycastHit ? " [ray]" : ( candidate.IsPreciseTextHit ? " [text]" : ( candidate.IsExactHit ? " [rect]" : string.Empty ) );
+               GUI.Label( GUIUtil.R( lineX, lineY, innerWidth, GUIUtil.RowHeight ), $"• {candidate.Path}{distanceLabel}{hitLabel} [{FormatUiPathInspectorPreview( candidate.Text, 48 )}]", GUIUtil.LabelTranslation );
+               lineY += GUIUtil.RowHeight;
+            }
+         }
+      }
+
+      private static string FormatUiPathInspectorPreview( string text, int maxLength = 96 )
+      {
+         if( string.IsNullOrEmpty( text ) ) return string.Empty;
+
+         var builder = new StringBuilder( text.Length );
+         bool previousWhitespace = false;
+
+         for( int i = 0; i < text.Length; i++ )
+         {
+            var c = text[ i ];
+            if( c == '\r' || c == '\n' )
+            {
+               if( builder.Length > 0 && builder[ builder.Length - 1 ] != ' ' )
+               {
+                  builder.Append( ' ' );
+               }
+
+               if( builder.Length < maxLength - 2 )
+               {
+                  builder.Append( '\\' ).Append( 'n' );
+               }
+
+               previousWhitespace = true;
+               continue;
+            }
+
+            if( char.IsWhiteSpace( c ) )
+            {
+               if( !previousWhitespace )
+               {
+                  builder.Append( ' ' );
+               }
+
+               previousWhitespace = true;
+               continue;
+            }
+
+            previousWhitespace = false;
+            builder.Append( c );
+
+            if( builder.Length >= maxLength )
+            {
+               return builder.ToString( 0, maxLength - 1 ) + "…";
+            }
+         }
+
+         return builder.ToString().Trim();
       }
 
       private void OnJobFailed( TranslationJob job )
@@ -3193,11 +4276,11 @@ namespace XUnity.AutoTranslator.Plugin.Core
             {
                var info = component.GetOrCreateTextTranslationInfo();
                var text = component.GetText( info );
-               if( text == key.Original_Text )
+               if( ShouldApplyCompletedTranslation( text, key.Original_Text, info ) )
                {
                   if( !string.IsNullOrEmpty( job.TranslatedText ) )
                   {
-                     SetTranslatedText( component, key.Untemplate( job.TranslatedText ), key.Original_Text, info );
+                     SetTranslatedText( component, key.Untemplate( job.TranslatedText ), key.Original_Text, info, true );
                   }
                }
             }
@@ -3243,9 +4326,9 @@ namespace XUnity.AutoTranslator.Plugin.Core
                         job.Endpoint.AddTranslationToCache( context.Result.OriginalText, translatedText );
                      }
 
-                     if( text == result.OriginalText )
+                     if( ShouldApplyCompletedTranslation( text, result.OriginalText, info ) )
                      {
-                        SetTranslatedText( context.Component, translatedText, context.Result.OriginalText, info );
+                        SetTranslatedText( context.Component, translatedText, context.Result.OriginalText, info, true );
                      }
 
                      if( context.TranslationResult != null )
@@ -3323,6 +4406,22 @@ namespace XUnity.AutoTranslator.Plugin.Core
                         try
                         {
                            var key = GetCacheKey( originalText, false );
+                           if( UnityTextParsers.GameLogTextParser.CanApply( ui ) )
+                           {
+                              var result = UnityTextParsers.GameLogTextParser.Parse( originalText, scope, TextCache );
+                              if( result != null )
+                              {
+                                 var translation = TranslateOrQueueWebJobImmediateByParserResult( ui, result, scope, false, false, false, TextCache, null );
+                                 if( translation != null )
+                                 {
+                                    tti.UnresizeUI( ui );
+                                    SetTranslatedText( ui, translation, null, tti );
+                                    updated = true;
+                                    continue;
+                                 }
+                              }
+                           }
+
                            if( TextCache.TryGetTranslation( key, true, false, scope, out string translatedText ) )
                            {
                               tti.UnresizeUI( ui );
@@ -3332,21 +4431,6 @@ namespace XUnity.AutoTranslator.Plugin.Core
                            }
                            else
                            {
-                              if( UnityTextParsers.GameLogTextParser.CanApply( ui ) )
-                              {
-                                 var result = UnityTextParsers.GameLogTextParser.Parse( originalText, scope, TextCache );
-                                 if( result != null )
-                                 {
-                                    var translation = TranslateOrQueueWebJobImmediateByParserResult( ui, result, scope, false, false, false, TextCache, null );
-                                    if( translation != null )
-                                    {
-                                       tti.UnresizeUI( ui );
-                                       SetTranslatedText( ui, translation, null, tti );
-                                       updated = true;
-                                       continue;
-                                    }
-                                 }
-                              }
                               if( UnityTextParsers.RegexSplittingTextParser.CanApply( ui ) )
                               {
                                  var result = UnityTextParsers.RegexSplittingTextParser.Parse( originalText, scope, TextCache );

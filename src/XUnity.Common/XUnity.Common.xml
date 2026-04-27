@@ -756,6 +756,79 @@
             WARNING: Pubternal API (internal). Do not use. May change during any update.
             </summary>
         </member>
+        <member name="T:XUnity.Common.Utilities.UnityInput">
+            <summary>
+            Abstraction layer over Unity's input systems for use in universal plugins that need to use hotkeys.
+            It can use either Input or Unity.InputSystem, depending on what's available. Input is preferred.
+            WARNING: Use only inside of Unity's main thread!
+            Copied from BepInEx to keep support for other plugin loaders.
+            </summary>
+        </member>
+        <member name="P:XUnity.Common.Utilities.UnityInput.Current">
+            <summary>
+            Best currently supported input system.
+            </summary>
+        </member>
+        <member name="P:XUnity.Common.Utilities.UnityInput.LegacyInputSystemAvailable">
+            <summary>
+            True if the Input class is not disabled.
+            </summary>
+        </member>
+        <member name="T:XUnity.Common.Utilities.IInputSystem">
+            <summary>
+            Generic input system interface. Just barely good enough for hotkeys.
+            </summary>
+        </member>
+        <member name="M:XUnity.Common.Utilities.IInputSystem.GetKey(System.String)">
+            <inheritdoc cref="M:UnityEngine.Input.GetKey(System.String)"/>
+        </member>
+        <member name="M:XUnity.Common.Utilities.IInputSystem.GetKey(UnityEngine.KeyCode)">
+            <inheritdoc cref="M:UnityEngine.Input.GetKey(UnityEngine.KeyCode)"/>
+        </member>
+        <member name="M:XUnity.Common.Utilities.IInputSystem.GetKeyDown(System.String)">
+            <inheritdoc cref="M:UnityEngine.Input.GetKeyDown(System.String)"/>
+        </member>
+        <member name="M:XUnity.Common.Utilities.IInputSystem.GetKeyDown(UnityEngine.KeyCode)">
+            <inheritdoc cref="M:UnityEngine.Input.GetKeyDown(UnityEngine.KeyCode)"/>
+        </member>
+        <member name="M:XUnity.Common.Utilities.IInputSystem.GetKeyUp(System.String)">
+            <inheritdoc cref="M:UnityEngine.Input.GetKeyUp(System.String)"/>
+        </member>
+        <member name="M:XUnity.Common.Utilities.IInputSystem.GetKeyUp(UnityEngine.KeyCode)">
+            <inheritdoc cref="M:UnityEngine.Input.GetKeyUp(UnityEngine.KeyCode)"/>
+        </member>
+        <member name="M:XUnity.Common.Utilities.IInputSystem.GetMouseButton(System.Int32)">
+            <inheritdoc cref="M:UnityEngine.Input.GetMouseButton(System.Int32)"/>
+        </member>
+        <member name="M:XUnity.Common.Utilities.IInputSystem.GetMouseButtonDown(System.Int32)">
+            <inheritdoc cref="M:UnityEngine.Input.GetMouseButtonDown(System.Int32)"/>
+        </member>
+        <member name="M:XUnity.Common.Utilities.IInputSystem.GetMouseButtonUp(System.Int32)">
+            <inheritdoc cref="M:UnityEngine.Input.GetMouseButtonUp(System.Int32)"/>
+        </member>
+        <member name="M:XUnity.Common.Utilities.IInputSystem.ResetInputAxes">
+            <inheritdoc cref="M:UnityEngine.Input.ResetInputAxes"/>
+        </member>
+        <member name="P:XUnity.Common.Utilities.IInputSystem.mousePosition">
+            <inheritdoc cref="P:UnityEngine.Input.mousePosition"/>
+        </member>
+        <member name="P:XUnity.Common.Utilities.IInputSystem.mouseScrollDelta">
+            <inheritdoc cref="P:UnityEngine.Input.mouseScrollDelta"/>
+        </member>
+        <member name="P:XUnity.Common.Utilities.IInputSystem.mousePresent">
+            <inheritdoc cref="P:UnityEngine.Input.mousePresent"/>
+        </member>
+        <member name="P:XUnity.Common.Utilities.IInputSystem.anyKey">
+            <inheritdoc cref="P:UnityEngine.Input.anyKey"/>
+        </member>
+        <member name="P:XUnity.Common.Utilities.IInputSystem.anyKeyDown">
+            <inheritdoc cref="P:UnityEngine.Input.anyKeyDown"/>
+        </member>
+        <member name="P:XUnity.Common.Utilities.IInputSystem.SupportedKeyCodes">
+            <summary>
+            All KeyCodes supported by the current input system.
+            </summary>
+        </member>
         <member name="T:XUnity.Common.Utilities.UnityObjectReferenceComparer">
             <summary>
             WARNING: Pubternal API (internal). Do not use. May change during any update.

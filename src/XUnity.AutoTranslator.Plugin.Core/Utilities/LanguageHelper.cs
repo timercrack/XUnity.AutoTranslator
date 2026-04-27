@@ -179,7 +179,33 @@ namespace XUnity.AutoTranslator.Plugin.Core.Utilities
             return false;
          }
 
+         if( MatchesIgnoreTextRegexes( text ) )
+         {
+            return false;
+         }
+
+         if( !ReferenceEquals( sanitized, text ) && MatchesIgnoreTextRegexes( sanitized ) )
+         {
+            return false;
+         }
+
          return ContainsLanguageSymbolsForSourceLanguage( sanitized );
+      }
+
+      private static bool MatchesIgnoreTextRegexes( string text )
+      {
+         var regexes = Settings.IgnoreTextRegexes;
+         if( regexes == null || regexes.Count == 0 || string.IsNullOrEmpty( text ) ) return false;
+
+         for( int i = 0; i < regexes.Count; i++ )
+         {
+            if( regexes[ i ].IsMatch( text ) )
+            {
+               return true;
+            }
+         }
+
+         return false;
       }
 
       private static string StripRichTextMarkup( string text )

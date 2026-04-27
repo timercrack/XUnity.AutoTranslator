@@ -117,9 +117,9 @@ namespace XUnity.AutoTranslator.Plugin.Core.Hooks.UGUI
 
       static void MM_Detour( Component __instance, string value )
       {
-         _original( __instance, value );
+         value = AutoTranslationPlugin.Current.Hook_TextChanged_WithResult( __instance, value, false ) ?? value;
 
-         Postfix( __instance );
+         _original( __instance, value );
       }
 #endif
    }
