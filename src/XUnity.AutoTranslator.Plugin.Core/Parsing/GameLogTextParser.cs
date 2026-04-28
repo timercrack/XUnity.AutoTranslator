@@ -12,6 +12,7 @@ namespace XUnity.AutoTranslator.Plugin.Core.Parsing
    internal class GameLogTextParser
    {
       private static readonly Regex RepeatedLogCounterRegex = new Regex( @"\s*[\(（][xX]\d+[\)）]\s*$", RegexOptions.Compiled );
+      private static readonly Regex AngleBracketWrappedLineRegex = new Regex( @"^(?<leading>\s*(?:<[^>]+>)*)<(?<padding>\s*)(?<text>[^<>\r\n]+?)(?<closingPadding>\s*)>(?<trailing>(?:</[^>]+>\s*)*)$", RegexOptions.Compiled );
       private static readonly Regex AngleBracketPrefixedLineRegex = new Regex( @"^(?<leading>\s*(?:<[^>]+>)*)<(?<padding>\s*)(?<text>[^<>\r\n]+?)(?<trailing>(?:</[^>]+>\s*)*)$", RegexOptions.Compiled );
       private static readonly HashSet<string> RichTextTagNames = new HashSet<string>( StringComparer.OrdinalIgnoreCase )
       {
@@ -102,6 +103,31 @@ namespace XUnity.AutoTranslator.Plugin.Core.Parsing
                      {
                         Key = key,
                         Info = new RepeatedLogCounterUntranslatedTextInfo( baseLine )
+                     } );
+                  }
+                  else
+                  {
+                     template.Append( line ).Append( '\n' );
+                  }
+               }
+               else if( TryGetAngleBracketWrappedLine( line, out var wrappedTemplatePrefix, out var wrappedBaseLine, out var wrappedTemplateSuffix ) )
+               {
+                  if( TryGetExistingTranslation( cache, wrappedBaseLine, scope, out var existingTranslation ) )
+                  {
+                     containsResolvedTranslations = true;
+
+                     template.Append( wrappedTemplatePrefix ).Append( existingTranslation ).Append( wrappedTemplateSuffix ).Append( '\n' );
+                  }
+                  else if( cache.IsTranslatable( wrappedBaseLine, true, scope ) )
+                  {
+                     containsTranslatable = true;
+
+                     var key = "[[" + ( arg++ ) + "]]";
+                     template.Append( wrappedTemplatePrefix ).Append( key ).Append( wrappedTemplateSuffix ).Append( '\n' );
+                     args.Add( new ArgumentedUntranslatedTextInfo
+                     {
+                        Key = key,
+                        Info = new AngleBracketWrappedUntranslatedTextInfo( wrappedBaseLine )
                      } );
                   }
                   else
@@ -200,6 +226,35 @@ namespace XUnity.AutoTranslator.Plugin.Core.Parsing
          }
 
          return false;
+      }
+
+      private static bool TryGetAngleBracketWrappedLine( string line, out string templatePrefix, out string baseLine, out string templateSuffix )
+      {
+         templatePrefix = null;
+         baseLine = null;
+         templateSuffix = null;
+
+         if( string.IsNullOrEmpty( line ) ) return false;
+
+         var match = AngleBracketWrappedLineRegex.Match( line );
+         if( !match.Success ) return false;
+
+         baseLine = match.Groups[ "text" ].Value;
+         if( string.IsNullOrEmpty( baseLine ) || baseLine.Trim().Length == 0 )
+         {
+            baseLine = null;
+            return false;
+         }
+
+         if( LooksLikeRichTextTag( baseLine, 0, baseLine.Length - 1 ) )
+         {
+            baseLine = null;
+            return false;
+         }
+
+         templatePrefix = match.Groups[ "leading" ].Value + "<" + match.Groups[ "padding" ].Value;
+         templateSuffix = match.Groups[ "closingPadding" ].Value + ">" + match.Groups[ "trailing" ].Value;
+         return true;
       }
 
       private static bool TryGetAngleBracketPrefixedLine( string line, out string templatePrefix, out string baseLine, out string templateSuffix )
@@ -342,6 +397,13 @@ namespace XUnity.AutoTranslator.Plugin.Core.Parsing
    internal class AngleBracketPrefixedUntranslatedTextInfo : GameLogSpecializedUntranslatedTextInfo
    {
       public AngleBracketPrefixedUntranslatedTextInfo( string untranslatedText ) : base( untranslatedText )
+      {
+      }
+   }
+
+   internal class AngleBracketWrappedUntranslatedTextInfo : GameLogSpecializedUntranslatedTextInfo
+   {
+      public AngleBracketWrappedUntranslatedTextInfo( string untranslatedText ) : base( untranslatedText )
       {
       }
    }
