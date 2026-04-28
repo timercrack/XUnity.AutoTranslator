@@ -6,7 +6,7 @@
 			Redirector.</Description>
 		<Authors>gravydevsupreme</Authors>
 		<PackageTags>unity;xunity</PackageTags>
-		<TargetFramework>net35</TargetFramework>
+		<TargetFramework>netstandard2.0</TargetFramework>
 		<Version>$(VersionCommon)</Version>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<DefineConstants>MANAGED</DefineConstants>
@@ -44,6 +44,10 @@
 		<Reference Include="UnityEngine.TextRenderingModule">
 			<HintPath>..\..\libs\Proxies\UnityEngine.TextRenderingModule.dll</HintPath>
 		</Reference>
+	</ItemGroup>
+
+	<ItemGroup Condition="'$(TargetFramework)'=='netstandard2.0'">
+		<PackageReference Include="System.Reflection.Emit.Lightweight" Version="4.7.0" />
 	</ItemGroup>
 
 	<ItemGroup>

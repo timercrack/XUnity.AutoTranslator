@@ -5,7 +5,7 @@
 		<Description>Main development dependency for XUnity Resource Redirector.</Description>
 		<Authors>gravydevsupreme</Authors>
 		<PackageTags>unity;xunity;resource redirection</PackageTags>
-		<TargetFramework>net35</TargetFramework>
+		<TargetFramework>netstandard2.0</TargetFramework>
 		<LangVersion>latest</LangVersion>
 		<Version>$(VersionRedirector)</Version>
 		<DefineConstants>MANAGED</DefineConstants>

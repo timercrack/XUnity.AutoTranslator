@@ -5,7 +5,7 @@
     <Description>Package that contains a simple inter-process protocol format used in XUnity.</Description>
     <Authors>gravydevsupreme</Authors>
     <PackageTags>unity;xunity</PackageTags>
-    <TargetFramework>net35</TargetFramework>
+    <TargetFramework>netstandard2.0</TargetFramework>
     <Version>$(VersionExtProtocol)</Version>
     <DefineConstants>MANAGED</DefineConstants>
   </PropertyGroup>

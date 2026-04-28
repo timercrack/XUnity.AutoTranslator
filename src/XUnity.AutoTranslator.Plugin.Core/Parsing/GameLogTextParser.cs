@@ -13,6 +13,7 @@ namespace XUnity.AutoTranslator.Plugin.Core.Parsing
    {
       private static readonly Regex RepeatedLogCounterRegex = new Regex( @"\s*[\(（][xX]\d+[\)）]\s*$", RegexOptions.Compiled );
       private static readonly Regex AngleBracketWrappedLineRegex = new Regex( @"^(?<leading>\s*(?:<[^>]+>)*)<(?<padding>\s*)(?<text>[^<>\r\n]+?)(?<closingPadding>\s*)>(?<trailing>(?:</[^>]+>\s*)*)$", RegexOptions.Compiled );
+      private static readonly Regex AngleBracketWrappedSegmentRegex = new Regex( @"<(?<padding>\s*)(?<text>[^<>\r\n]+?)(?<closingPadding>\s*)>", RegexOptions.Compiled );
       private static readonly Regex AngleBracketPrefixedLineRegex = new Regex( @"^(?<leading>\s*(?:<[^>]+>)*)<(?<padding>\s*)(?<text>[^<>\r\n]+?)(?<trailing>(?:</[^>]+>\s*)*)$", RegexOptions.Compiled );
       private static readonly HashSet<string> RichTextTagNames = new HashSet<string>( StringComparer.OrdinalIgnoreCase )
       {
@@ -92,6 +93,56 @@ namespace XUnity.AutoTranslator.Plugin.Core.Parsing
                      containsResolvedTranslations = true;
 
                      template.Append( existingTranslation ).Append( counterSuffix ).Append( '\n' );
+                  }
+                  else if( TryGetAngleBracketWrappedLine( baseLine, out var wrappedCounterTemplatePrefix, out var wrappedCounterBaseLine, out var wrappedCounterTemplateSuffix ) )
+                  {
+                     if( TryGetExistingTranslation( cache, wrappedCounterBaseLine, scope, out existingTranslation ) )
+                     {
+                        containsResolvedTranslations = true;
+
+                        template.Append( wrappedCounterTemplatePrefix ).Append( existingTranslation ).Append( wrappedCounterTemplateSuffix ).Append( counterSuffix ).Append( '\n' );
+                     }
+                     else if( cache.IsTranslatable( wrappedCounterBaseLine, true, scope ) )
+                     {
+                        containsTranslatable = true;
+
+                        var key = "[[" + ( arg++ ) + "]]";
+                        template.Append( wrappedCounterTemplatePrefix ).Append( key ).Append( wrappedCounterTemplateSuffix ).Append( counterSuffix ).Append( '\n' );
+                        args.Add( new ArgumentedUntranslatedTextInfo
+                        {
+                           Key = key,
+                           Info = new AngleBracketWrappedUntranslatedTextInfo( wrappedCounterBaseLine )
+                        } );
+                     }
+                     else
+                     {
+                        template.Append( line ).Append( '\n' );
+                     }
+                  }
+                  else if( TryGetAngleBracketPrefixedLine( baseLine, out var prefixedCounterTemplatePrefix, out var prefixedCounterBaseLine, out var prefixedCounterTemplateSuffix ) )
+                  {
+                     if( TryGetExistingTranslation( cache, prefixedCounterBaseLine, scope, out existingTranslation ) )
+                     {
+                        containsResolvedTranslations = true;
+
+                        template.Append( prefixedCounterTemplatePrefix ).Append( existingTranslation ).Append( prefixedCounterTemplateSuffix ).Append( counterSuffix ).Append( '\n' );
+                     }
+                     else if( cache.IsTranslatable( prefixedCounterBaseLine, true, scope ) )
+                     {
+                        containsTranslatable = true;
+
+                        var key = "[[" + ( arg++ ) + "]]";
+                        template.Append( prefixedCounterTemplatePrefix ).Append( key ).Append( prefixedCounterTemplateSuffix ).Append( counterSuffix ).Append( '\n' );
+                        args.Add( new ArgumentedUntranslatedTextInfo
+                        {
+                           Key = key,
+                           Info = new AngleBracketPrefixedUntranslatedTextInfo( prefixedCounterBaseLine )
+                        } );
+                     }
+                     else
+                     {
+                        template.Append( line ).Append( '\n' );
+                     }
                   }
                   else if( cache.IsTranslatable( baseLine, true, scope ) )
                   {
@@ -237,24 +288,64 @@ namespace XUnity.AutoTranslator.Plugin.Core.Parsing
          if( string.IsNullOrEmpty( line ) ) return false;
 
          var match = AngleBracketWrappedLineRegex.Match( line );
-         if( !match.Success ) return false;
+         if( !match.Success )
+         {
+            return TryGetAngleBracketWrappedSegmentLine( line, out templatePrefix, out baseLine, out templateSuffix );
+         }
 
          baseLine = match.Groups[ "text" ].Value;
          if( string.IsNullOrEmpty( baseLine ) || baseLine.Trim().Length == 0 )
          {
-            baseLine = null;
-            return false;
+            return TryGetAngleBracketWrappedSegmentLine( line, out templatePrefix, out baseLine, out templateSuffix );
          }
 
          if( LooksLikeRichTextTag( baseLine, 0, baseLine.Length - 1 ) )
          {
-            baseLine = null;
-            return false;
+            return TryGetAngleBracketWrappedSegmentLine( line, out templatePrefix, out baseLine, out templateSuffix );
          }
 
          templatePrefix = match.Groups[ "leading" ].Value + "<" + match.Groups[ "padding" ].Value;
          templateSuffix = match.Groups[ "closingPadding" ].Value + ">" + match.Groups[ "trailing" ].Value;
          return true;
+      }
+
+      private static bool TryGetAngleBracketWrappedSegmentLine( string line, out string templatePrefix, out string baseLine, out string templateSuffix )
+      {
+         templatePrefix = null;
+         baseLine = null;
+         templateSuffix = null;
+
+         if( string.IsNullOrEmpty( line ) ) return false;
+
+         var matches = AngleBracketWrappedSegmentRegex.Matches( line );
+         for( int i = 0; i < matches.Count; i++ )
+         {
+            var match = matches[ i ];
+            var candidate = match.Groups[ "text" ].Value;
+            if( string.IsNullOrEmpty( candidate ) || candidate.Trim().Length == 0 )
+            {
+               continue;
+            }
+
+            if( LooksLikeRichTextTag( candidate, 0, candidate.Length - 1 ) )
+            {
+               continue;
+            }
+
+            var leading = line.Substring( 0, match.Index );
+            var trailing = line.Substring( match.Index + match.Length );
+            if( !IsAngleBracketWrappedContext( leading ) || !IsAngleBracketWrappedContext( trailing ) )
+            {
+               continue;
+            }
+
+            templatePrefix = leading + "<" + match.Groups[ "padding" ].Value;
+            templateSuffix = match.Groups[ "closingPadding" ].Value + ">" + trailing;
+            baseLine = candidate;
+            return true;
+         }
+
+         return false;
       }
 
       private static bool TryGetAngleBracketPrefixedLine( string line, out string templatePrefix, out string baseLine, out string templateSuffix )
@@ -310,6 +401,21 @@ namespace XUnity.AutoTranslator.Plugin.Core.Parsing
          }
 
          return changed ? builder.ToString() : text;
+      }
+
+      private static bool IsAngleBracketWrappedContext( string text )
+      {
+         if( string.IsNullOrEmpty( text ) ) return true;
+
+         var stripped = StripKnownRichTextTags( text );
+         for( int i = 0; i < stripped.Length; i++ )
+         {
+            var c = stripped[ i ];
+            if( char.IsWhiteSpace( c ) ) continue;
+            if( char.IsLetter( c ) ) return false;
+         }
+
+         return true;
       }
 
       private static bool TryGetRichTextTagEnd( string text, int startIndex, out int closingIndex )

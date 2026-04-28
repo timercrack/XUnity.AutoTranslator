@@ -69,16 +69,25 @@
 
 ## 这个 fork 的默认口径
 
-当前默认配置重点如下：
+当前默认值现在主要由代码提供，配置文件默认只保留下面三项：
 
-- `[Service] Endpoint=LLMTranslate`
-- `[General] Language=`（留空时自动使用系统语言）
-- `[General] FromLanguage=en`
-- `[Behaviour] OverrideFontTextMeshPro=zh=chinesefont;zh-TW=arialuni_sdf_u6000;default=arialuni_sdf_u6000`
 - `[LLMTranslate] Url=https://api.deepseek.com/chat/completions`
+- `[LLMTranslate] ApiKey=`
 - `[LLMTranslate] Model=deepseek-v4-flash`
 
-`LLMTranslate` 其余参数（Prompt、`Temperature=0.2`、`MaxTokens=8192`、`BatchSize=100`、`MaxConcurrency=1`、`EnableShortDelay=False`、`DisableSpamChecks=False`）现在都固定写死在代码里，不再要求写进配置文件。
+如果你想手动指定目标语言，再额外自己加：
+
+- `[General] Language=ru`（或其他目标语言代码）
+
+其余默认值全部继续由代码提供，例如：
+
+- 默认端点仍然是 `LLMTranslate`
+- 默认源语言仍然是 `en`
+- 默认字体映射仍然是 `OverrideFontTextMeshPro=zh=chinesefont;zh-TW=arialuni_sdf_u6000;default=arialuni_sdf_u6000`
+- `LLMTranslate` 的 Prompt、`Temperature=0.2`、`MaxTokens=8192`、`BatchSize=100`、`MaxConcurrency=1`、`EnableShortDelay=False`、`DisableSpamChecks=False` 仍然固定写死在代码里
+- Ostranauts 已验证的一组 `TextFrameworks` / `Behaviour` / `Files` 默认值也仍然固定保留在代码中
+
+缺省项现在不会在启动时自动回填进配置文件，因此配置可以长期保持精简。
 
 另外，这个 fork 还把当前 Ostranauts 使用中的这些行为参数做成了默认值：
 
@@ -94,30 +103,27 @@
 
 ## 最小使用方法
 
-只需要关注下面这几段配置即可：
+只需要保留下面这三项配置即可：
 
 ```ini
-[Service]
-Endpoint=LLMTranslate
-FallbackEndpoint=
-
-[General]
-Language=
-FromLanguage=en
-
-[Behaviour]
-OverrideFontTextMeshPro=zh=chinesefont;zh-TW=arialuni_sdf_u6000;default=arialuni_sdf_u6000
-
 [LLMTranslate]
 Url=https://api.deepseek.com/chat/completions
 ApiKey=
 Model=deepseek-v4-flash
 ```
 
+如果你想固定目标语言，而不是跟随系统语言，再额外加上：
+
+```ini
+[General]
+Language=ru
+```
+
 其中：
 
-- `Language=` 留空表示自动跟随系统语言
+- 不写 `General.Language` 时，会自动跟随系统语言
 - `LLMTranslate` 的 Prompt 和其他运行参数都由代码内置，无需再写到配置文件里
+- 其他 `Service` / `General.FromLanguage` / `Behaviour` / `Files` / `TextFrameworks` 等项都继续使用代码默认值，不需要展开到配置文件里
 
 ## 如何在中文和俄文之间切换
 
@@ -148,3 +154,183 @@ Language=ru
 - 内置 Prompt 会自动要求 LLM 输出俄文译文
 - `OverrideFontTextMeshPro` 自动落到默认的 `arialuni_sdf_u6000`
 - 翻译缓存和文本文件路径落到 `Translation\ru\...`
+
+## 附录：当前代码默认值清单
+
+下面这份清单对应的是当前代码里真正生效的默认值，主要来源于：
+
+- `src/XUnity.AutoTranslator.Plugin.Core/Configuration/Settings.cs`
+- `src/Translators/LLMTranslate/LLMTranslateEndpoint.cs`
+
+如果你手动在配置文件里补写其他**受支持**配置项，插件仍然会优先读取你写的值来覆盖这些默认值；只有没写出的项，才继续使用下面这套代码默认值。
+
+### `Service` 与 `General`
+
+```ini
+[Service]
+Endpoint=LLMTranslate
+FallbackEndpoint=
+
+[General]
+Language=
+FromLanguage=en
+```
+
+- `General.Language=` 留空时自动跟随系统语言
+- 如果系统语言无法解析，才回退到 `zh`
+
+### `LLMTranslate`
+
+```ini
+[LLMTranslate]
+Url=https://api.deepseek.com/chat/completions
+ApiKey=
+Model=deepseek-v4-flash
+```
+
+另外这几个 `LLMTranslate` 运行参数固定写死在代码里：
+
+- `Prompt`：代码内置模板，按目标语言自动替换语言名称
+- `Temperature=0.2`
+- `MaxTokens=8192`
+- `BatchSize=100`
+- `MaxConcurrency=1`
+- `EnableShortDelay=False`
+- `DisableSpamChecks=False`
+
+### `TextFrameworks`
+
+```ini
+[TextFrameworks]
+EnableIMGUI=True
+EnableUGUI=True
+EnableUIElements=True
+EnableNGUI=True
+EnableTextMeshPro=True
+EnableTextMesh=True
+EnableFairyGUI=True
+```
+
+### `Behaviour`
+
+```ini
+[Behaviour]
+MaxCharactersPerTranslation=2500
+IgnoreWhitespaceInDialogue=False
+MinDialogueChars=20
+ForceSplitTextAfterCharacters=0
+CopyToClipboard=False
+MaxClipboardCopyCharacters=2500
+ClipboardDebounceTime=1.25
+EnableUIResizing=True
+EnableBatching=True
+UseStaticTranslations=True
+OverrideFont=
+OverrideFontSize=
+OverrideFontTextMeshPro=zh=chinesefont;zh-TW=arialuni_sdf_u6000;default=arialuni_sdf_u6000
+FallbackFontTextMeshPro=
+ResizeUILineSpacingScale=
+ForceUIResizing=False
+IgnoreTextStartingWith=Age:;C:;D:;E:;F:;G:;UTC;Mass:;Condition:
+IgnoreTextRegexes=^\s*[xX]\d+\s*$
+TextGetterCompatibilityMode=False
+WhitelistPaths=
+BlacklistPaths=
+GameLogTextPaths=/Canvas Stack/Canvas Crew Bar/GUICrewStatus/pnlMessageScroll;/Canvas Stack/Canvas Tooltip Compact/ItemList;/OffscreenDraw/CanvasDockSysDraw;/OffscreenDraw/CanvasATCDraw;/Canvas Stack/Canvas Objectives;/Canvas Stack/Canvas Helmet/bmpHelmet/pnlHUD;/Canvas Stack/Canvas GUI
+IgnoreStabilizationPaths=/Canvas Info(Clone)/Offset
+RomajiPostProcessing=ReplaceMacronWithCircumflex;RemoveApostrophes;ReplaceHtmlEntities
+TranslationPostProcessing=ReplaceMacronWithCircumflex;ReplaceHtmlEntities
+RegexPostProcessing=None
+CacheRegexPatternResults=False
+PersistRichTextMode=Final
+CacheRegexLookups=False
+CacheWhitespaceDifferences=False
+GenerateStaticSubstitutionTranslations=False
+GeneratePartialTranslations=False
+EnableTranslationScoping=True
+EnableSilentMode=True
+BlacklistedIMGUIPlugins=
+EnableTextPathLogging=True
+EnableUIPathInspector=False
+TextPathLoggingIgnoredPaths=
+PeriodicManualHookIntervalSeconds=1.0
+OutputUntranslatableText=False
+IgnoreVirtualTextSetterCallingRules=False
+MaxTextParserRecursion=1
+HtmlEntityPreprocessing=True
+HandleRichText=True
+EnableTranslationHelper=False
+ForceMonoModHooks=False
+InitializeHarmonyDetourBridge=False
+RedirectedResourceDetectionStrategy=AppendMongolianVowelSeparatorAndRemoveAll
+OutputTooLongText=False
+TemplateAllNumberAway=True
+ReloadTranslationsOnFileChange=False
+DisableTextMeshProScrollInEffects=True
+CacheParsedTranslations=False
+```
+
+### `Files`
+
+```ini
+[Files]
+Directory=Translation\{Lang}\Text
+OutputFile=Translation\{Lang}\Text\_AutoGeneratedTranslations.txt
+SubstitutionFile=Translation\{Lang}\Text\_Substitutions.txt
+PreprocessorsFile=Translation\{Lang}\Text\_Preprocessors.txt
+PostprocessorsFile=Translation\{Lang}\Text\_Postprocessors.txt
+```
+
+### `Texture`
+
+```ini
+[Texture]
+TextureDirectory=Translation\{Lang}\Texture
+EnableTextureDumping=False
+EnableTextureToggling=False
+EnableTextureScanOnSceneLoad=False
+EnableSpriteRendererHooking=False
+LoadUnmodifiedTextures=False
+DetectDuplicateTextureNames=False
+DuplicateTextureNames=
+EnableLegacyTextureLoading=False
+TextureHashGenerationStrategy=FromImageName
+CacheTexturesInMemory=True
+EnableSpriteHooking=False
+```
+
+- `EnableTextureTranslation` 的默认值是动态的：当 `Translation\{Lang}\Texture` 目录存在时为 `True`，否则为 `False`
+
+### `ResourceRedirector`
+
+```ini
+[ResourceRedirector]
+PreferredStoragePath=Translation\{Lang}\RedirectedResources
+EnableTextAssetRedirector=False
+LogAllLoadedResources=False
+EnableDumping=False
+CacheMetadataForAllFiles=True
+```
+
+### `Http`、`TranslationAggregator`、`Debug`、`Migrations`
+
+```ini
+[Http]
+UserAgent=
+DisableCertificateValidation=True
+
+[TranslationAggregator]
+Width=542
+Height=300
+EnabledTranslators=
+
+[Debug]
+EnableConsole=False
+
+[Migrations]
+Enable=True
+Tag=<当前插件版本>
+```
+
+- `Migrations.Tag` 在运行时会被设置为当前插件版本
+- 由于缺省项不会再自动回填，这些 section 默认不会主动出现在配置文件里

@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>net35</TargetFramework>
+		<TargetFramework>netstandard2.0</TargetFramework>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -40,8 +40,8 @@
 			<_PluginOutputs Include="$(TargetDir)ICSharpCode.SharpZipLib.dll" />
 			<_ResourceRedirectorOutputs Include="$(TargetDir)XUnity.ResourceRedirector.dll" />
 			<_ResourceRedirectorOutputs
-				Include="$(SolutionDir)src\XUnity.ResourceRedirector.BepInEx\bin\$(Configuration)\net35\XUnity.ResourceRedirector.BepInEx.dll"
-				Condition="Exists('$(SolutionDir)src\XUnity.ResourceRedirector.BepInEx\bin\$(Configuration)\net35\XUnity.ResourceRedirector.BepInEx.dll')" />
+				Include="$(SolutionDir)src\XUnity.ResourceRedirector.BepInEx\bin\$(Configuration)\$(TargetFramework)\XUnity.ResourceRedirector.BepInEx.dll"
+				Condition="Exists('$(SolutionDir)src\XUnity.ResourceRedirector.BepInEx\bin\$(Configuration)\$(TargetFramework)\XUnity.ResourceRedirector.BepInEx.dll')" />
 			<_CoreOutputs Include="$(TargetDir)XUnity.Common.dll" />
 		</ItemGroup>
 		<Copy SourceFiles="@(_PluginOutputs)" DestinationFolder="$(PluginsDir)"

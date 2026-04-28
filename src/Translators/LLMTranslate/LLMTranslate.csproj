@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net35</TargetFramework>
+        <TargetFramework>netstandard2.0</TargetFramework>
     </PropertyGroup>
 
     <ItemGroup>
@@ -11,8 +11,18 @@
     </ItemGroup>
 
     <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-        <Exec
-            Command="if $(ConfigurationName) == Release (&#xD;&#xA;   XCOPY /Y /I &quot;$(TargetDir)$(TargetName)$(TargetExt)&quot; &quot;$(SolutionDir)dist\Translators\&quot;&#xD;&#xA;)" />
+        <PropertyGroup>
+            <DistTranslatorsDir>$(SolutionDir)dist\Translators</DistTranslatorsDir>
+        </PropertyGroup>
+
+        <MakeDir Directories="$(DistTranslatorsDir)" Condition="'$(ConfigurationName)'=='Release'" />
+
+        <ItemGroup Condition="'$(ConfigurationName)'=='Release'">
+            <_DistTranslatorOutputs Include="$(TargetDir)$(TargetName)$(TargetExt)" />
+        </ItemGroup>
+
+        <Copy SourceFiles="@(_DistTranslatorOutputs)" DestinationFolder="$(DistTranslatorsDir)"
+            SkipUnchangedFiles="true" Condition="'$(ConfigurationName)'=='Release'" />
 
         <PropertyGroup Condition="'$(CopyToBepInExPath)'!=''">
             <NormalizedTarget>$(CopyToBepInExPath.TrimEnd('\'))</NormalizedTarget>

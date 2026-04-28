@@ -422,8 +422,16 @@ namespace XUnity.AutoTranslator.Plugin.Core.Configuration
                Migrate();
             }
 
-            // update tag
-            MigrationsTag = PluginEnvironment.Current.Preferences[ "Migrations" ][ "Tag" ].Value = PluginData.Version;
+            MigrationsTag = PluginData.Version;
+
+            if( PluginEnvironment.Current.Preferences.HasSection( "Migrations" ) )
+            {
+               var migrationsSection = PluginEnvironment.Current.Preferences.GetSection( "Migrations" );
+               if( migrationsSection != null && migrationsSection.HasKey( "Tag" ) )
+               {
+                  migrationsSection.GetKey( "Tag" ).Value = PluginData.Version;
+               }
+            }
 
             Save();
          }
